@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spyfall Clash - Jogo do Impostor</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Tela Inicial -->
+        <div id="telaInicial" class="tela ativa">
+            <div class="logo">
+                <h1>⚔️ Spyfall Clash ⚔️</h1>
+                <p class="subtitulo">Jogo do Impostor com tema Clash Royale</p>
+            </div>
+            <div class="botoes-iniciais">
+                <button id="btnCriarSala" class="btn btn-primario">Criar Sala</button>
+                <button id="btnEntrarSala" class="btn btn-secundario">Entrar em Sala</button>
+            </div>
+        </div>
+
+        <!-- Tela Criar Sala -->
+        <div id="telaCriarSala" class="tela">
+            <h2>Criar Nova Sala</h2>
+            <div class="form-group">
+                <input type="text" id="nomeCriar" placeholder="Seu nome" maxlength="20" required>
+                <button id="btnConfirmarCriar" class="btn btn-primario">Criar</button>
+            </div>
+            <button id="btnVoltarCriar" class="btn btn-voltar">Voltar</button>
+        </div>
+
+        <!-- Tela Entrar em Sala -->
+        <div id="telaEntrarSala" class="tela">
+            <h2>Entrar em Sala</h2>
+            <div class="form-group">
+                <input type="text" id="codigoSala" placeholder="Código da sala" maxlength="6" required>
+                <input type="text" id="nomeEntrar" placeholder="Seu nome" maxlength="20" required>
+                <button id="btnConfirmarEntrar" class="btn btn-primario">Entrar</button>
+            </div>
+            <button id="btnVoltarEntrar" class="btn btn-voltar">Voltar</button>
+            <div id="erroMensagem" class="erro"></div>
+        </div>
+
+        <!-- Tela Sala (Lobby) -->
+        <div id="telaSala" class="tela">
+            <div class="header-sala">
+                <h2>Sala: <span id="codigoSalaDisplay"></span></h2>
+                <button id="btnCopiarCodigo" class="btn btn-copiar">📋 Copiar Código</button>
+            </div>
+            
+            <div id="configHost" class="config-host" style="display: none;">
+                <h3>Configurações</h3>
+                <div class="opcoes-impostores">
+                    <label>Quantidade de Impostores:</label>
+                    <div class="radio-group">
+                        <label><input type="radio" name="impostores" value="1" checked> 1 Impostor</label>
+                        <label><input type="radio" name="impostores" value="2"> 2 Impostores</label>
+                    </div>
+                </div>
+                <button id="btnIniciarPartida" class="btn btn-iniciar">Iniciar Partida</button>
+            </div>
+
+            <div class="lista-jogadores">
+                <h3>Jogadores (<span id="quantidadeJogadores">0</span>)</h3>
+                <ul id="listaJogadores"></ul>
+            </div>
+
+            <div id="aguardandoJogadores" class="mensagem-aguardo">
+                <p>Aguardando mais jogadores...</p>
+                <p class="info">Mínimo de 3 jogadores necessário</p>
+            </div>
+        </div>
+
+        <!-- Tela Rodada -->
+        <div id="telaRodada" class="tela">
+            <div class="header-rodada">
+                <h2>Rodada <span id="rodadaAtual">1</span> de <span id="totalRodadas">3</span></h2>
+            </div>
+            
+            <div id="infoJogador" class="info-jogador">
+                <div id="infoNormal" class="info-normal">
+                    <h3>🎯 Sua Palavra Secreta:</h3>
+                    <div class="palavra-destaque" id="palavraSecreta"></div>
+                    <p class="instrucao">Dê dicas sobre esta carta sem falar o nome diretamente!</p>
+                </div>
+                <div id="infoImpostor" class="info-impostor" style="display: none;">
+                    <h3>🕵️ Você é o IMPOSTOR!</h3>
+                    <p class="instrucao">Você não sabe qual é a palavra. Tente descobrir e se misturar com os outros jogadores!</p>
+                </div>
+            </div>
+
+            <div class="lista-jogadores-rodada">
+                <h3>Jogadores na Partida</h3>
+                <ul id="listaJogadoresRodada"></ul>
+            </div>
+
+            <div id="controlesHost" class="controles-host" style="display: none;">
+                <button id="btnIniciarVotacao" class="btn btn-votar">Iniciar Votação</button>
+            </div>
+        </div>
+
+        <!-- Tela Votação -->
+        <div id="telaVotacao" class="tela">
+            <div class="header-votacao">
+                <h2>🗳️ Votação</h2>
+                <p>Quem você acha que é o impostor?</p>
+            </div>
+            
+            <div class="lista-votacao">
+                <ul id="listaVotacao"></ul>
+            </div>
+
+            <div id="votosParciais" class="votos-parciais">
+                <h3>Votos Parciais</h3>
+                <ul id="listaVotosParciais"></ul>
+            </div>
+        </div>
+
+        <!-- Tela Resultado -->
+        <div id="telaResultado" class="tela">
+            <div class="resultado-votacao">
+                <h2>Resultado da Votação</h2>
+                <div id="resultadoConteudo"></div>
+                <div id="resultadoPalavra" class="palavra-resultado"></div>
+                <div id="resultadoVotos" class="votos-resultado"></div>
+            </div>
+        </div>
+
+        <!-- Tela Fim de Jogo -->
+        <div id="telaFimJogo" class="tela">
+            <div class="fim-jogo">
+                <h2>🎮 Fim de Jogo!</h2>
+                <div id="resultadoFinal"></div>
+                <button id="btnNovaPartida" class="btn btn-primario">Nova Partida</button>
+                <button id="btnVoltarMenu" class="btn btn-secundario">Voltar ao Menu</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
+
