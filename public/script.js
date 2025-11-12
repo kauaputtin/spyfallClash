@@ -21,6 +21,13 @@ const telas = {
 function mostrarTela(tela) {
     Object.values(telas).forEach(t => t.classList.remove('ativa'));
     telas[tela].classList.add('ativa');
+    
+    // Adicionar/remover classe no body para imagem de fundo
+    if (tela === 'inicial') {
+        document.body.classList.add('tela-inicial-ativa');
+    } else {
+        document.body.classList.remove('tela-inicial-ativa');
+    }
 }
 
 // Event Listeners - Tela Inicial
@@ -348,5 +355,10 @@ document.getElementById('btnVoltarEntrar').addEventListener('click', () => {
     document.getElementById('codigoSala').value = '';
     document.getElementById('nomeEntrar').value = '';
     document.getElementById('erroMensagem').classList.remove('ativo');
+});
+
+// Adicionar classe para imagem de fundo na tela inicial ao carregar
+document.addEventListener('DOMContentLoaded', () => {
+    document.body.classList.add('tela-inicial-ativa');
 });
 
