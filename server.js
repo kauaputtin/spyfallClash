@@ -85,6 +85,31 @@ function selecionarImpostores(jogadores, quantidade) {
 io.on('connection', (socket) => {
   console.log('Novo jogador conectado:', socket.id);
 
+  // Variáveis de heartbeat para este socket
+  let lastPing = Date.now();
+  const PING_TIMEOUT = 90000; // 90 segundos
+  
+  // Monitorar inatividade do cliente
+  const pingCheckInterval = setInterval(() => {
+    const timeSincePing = Date.now() - lastPing;
+    if (timeSincePing > PING_TIMEOUT) {
+      console.log(`[Heartbeat] Cliente ${socket.id} inativo por ${timeSincePing}ms. Desconectando...`);
+      socket.disconnect(true);
+    }
+  }, 30000); // Verificar a cada 30 segundos
+
+  // Listener para ping do cliente
+  socket.on('ping', (data) => {
+    lastPing = Date.now();
+    // Responder com pong
+    socket.emit('pong');
+  });
+
+  // Limpar interval ao desconectar
+  socket.on('disconnect', () => {
+    clearInterval(pingCheckInterval);
+  });
+
   // Criar sala
   socket.on('criarSala', (nomeJogador) => {
     const codigo = gerarCodigoSala();
@@ -98,9 +123,8 @@ io.on('connection', (socket) => {
         palavra: null,
         votos: 0
       }],
-      estado: 'aguardando', // aguardando, configurando, jogando, votando, finalizado
+      estado: 'aguardando', // aguardando, configurando, jogando, votando, resultado
       rodadaAtual: 0,
-      totalRodadas: 3,
       quantidadeImpostores: 1,
       palavraAtual: null,
       votos: {},
@@ -241,43 +265,12 @@ io.on('connection', (socket) => {
 
       io.to(codigo).emit('resultadoVotacao', resultado);
 
-      // Verificar se deve continuar para próxima rodada
+      // Aguardar host iniciar próxima rodada
       setTimeout(() => {
-        if (sala.rodadaAtual < sala.totalRodadas) {
-          sala.rodadaAtual++;
-          sala.estado = 'jogando';
-          
-          // Selecionar nova palavra e novos impostores
-          const novaPalavra = obterCartaAleatoria();
-          sala.palavraAtual = novaPalavra;
-          const novosImpostores = selecionarImpostores(sala.jogadores, sala.quantidadeImpostores);
-          
-          sala.jogadores.forEach((jogador, index) => {
-            jogador.isImpostor = novosImpostores.includes(index);
-            jogador.palavra = jogador.isImpostor ? null : novaPalavra;
-            jogador.votos = 0;
-          });
-
-          sala.jogadores.forEach((jogador) => {
-            io.to(jogador.id).emit('rodadaIniciada', {
-              rodada: sala.rodadaAtual,
-              totalRodadas: sala.totalRodadas,
-              palavra: jogador.palavra,
-              isImpostor: jogador.isImpostor
-            });
-          });
-
-          io.to(codigo).emit('atualizarJogadores', sala.jogadores);
-        } else {
-          // Jogo finalizado
-          sala.estado = 'finalizado';
-          io.to(codigo).emit('jogoFinalizado', {
-            jogadores: sala.jogadores.map(j => ({
-              nome: j.nome,
-              isImpostor: j.isImpostor
-            }))
-          });
-        }
+        sala.estado = 'resultado';
+        io.to(codigo).emit('aguardandoProximaRodada', {
+          rodadaAtual: sala.rodadaAtual
+        });
       }, 5000);
     } else {
       // Atualizar votos parciais
@@ -285,6 +278,40 @@ io.on('connection', (socket) => {
         votos: sala.jogadores.map(j => ({ nome: j.nome, votos: j.votos }))
       });
     }
+  });
+
+  // Iniciar nova rodada (apenas host)
+  socket.on('iniciarNovaRodada', (codigo) => {
+    const sala = salas.get(codigo);
+    if (!sala || socket.id !== sala.host) return;
+    
+    if (sala.estado !== 'resultado') return;
+    
+    // Incrementar rodada
+    sala.rodadaAtual++;
+    sala.estado = 'jogando';
+    
+    // Selecionar nova palavra e novos impostores
+    const novaPalavra = obterCartaAleatoria();
+    sala.palavraAtual = novaPalavra;
+    const novosImpostores = selecionarImpostores(sala.jogadores, sala.quantidadeImpostores);
+    
+    sala.jogadores.forEach((jogador, index) => {
+      jogador.isImpostor = novosImpostores.includes(index);
+      jogador.palavra = jogador.isImpostor ? null : novaPalavra;
+      jogador.votos = 0;
+    });
+
+    sala.jogadores.forEach((jogador) => {
+      io.to(jogador.id).emit('rodadaIniciada', {
+        rodada: sala.rodadaAtual,
+        palavra: jogador.palavra,
+        isImpostor: jogador.isImpostor
+      });
+    });
+
+    io.to(codigo).emit('atualizarJogadores', sala.jogadores);
+    console.log(`Rodada ${sala.rodadaAtual} iniciada na sala ${codigo}`);
   });
 
   // Desconexão

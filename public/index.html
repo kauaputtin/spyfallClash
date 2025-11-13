@@ -6,8 +6,16 @@
     <title>Spyfall Clash - Jogo do Impostor</title>
     <link rel="stylesheet" href="style.css">
     <script src="/socket.io/socket.io.js"></script>
+    <script src="heartbeat.js"></script>
+    <script src="connectivity-manager.js"></script>
 </head>
 <body>
+    <!-- Indicador de Status de Conexão -->
+    <div id="statusConexao" class="status-conexao">
+        <div id="statusIndicador" class="status-indicador conectado"></div>
+        <span id="statusTexto" class="status-texto">Conectado</span>
+    </div>
+
     <div class="container">
         <!-- Tela Inicial -->
         <div id="telaInicial" class="tela ativa">
@@ -76,7 +84,7 @@
         <!-- Tela Rodada -->
         <div id="telaRodada" class="tela">
             <div class="header-rodada">
-                <h2>Rodada <span id="rodadaAtual">1</span> de <span id="totalRodadas">3</span></h2>
+                <h2>Rodada <span id="rodadaAtual">1</span></h2>
             </div>
             
             <div id="infoJogador" class="info-jogador">
@@ -125,6 +133,9 @@
                 <div id="resultadoConteudo"></div>
                 <div id="resultadoPalavra" class="palavra-resultado"></div>
                 <div id="resultadoVotos" class="votos-resultado"></div>
+                <div id="controlesNovaRodada" class="controles-nova-rodada" style="display: none;">
+                    <button id="btnNovaRodada" class="btn btn-iniciar">Nova Rodada</button>
+                </div>
             </div>
         </div>
 

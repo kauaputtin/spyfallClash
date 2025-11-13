@@ -5,6 +5,32 @@ let isHost = false;
 let nomeJogador = '';
 let jogadores = [];
 
+// Gerenciadores de Conectividade
+let heartbeatManager = null;
+let connectivityManager = null;
+
+// Inicializar gerenciadores de conectividade
+function inicializarGerenciadores() {
+    // Criar ConnectivityManager para gerenciar Service Worker, Wake Lock, etc
+    connectivityManager = new ConnectivityManager({
+        statusCallback: (status, mensagem) => {
+            console.log(`[Conectividade] ${status}: ${mensagem}`);
+            // Poderia usar isso para debug, mas não será mostrado por padrão
+        }
+    });
+
+    // Criar HeartbeatManager para manter ping com servidor
+    heartbeatManager = new HeartbeatManager(socket, {
+        pingInterval: 15000,      // Ping a cada 15 segundos
+        pongTimeout: 60000,       // Timeout após 60 segundos sem pong
+        maxReconnectAttempts: 10,
+        reconnectDelay: 3000,
+        statusCallback: (status, mensagem) => {
+            atualizarStatusConexao(status, mensagem);
+        }
+    });
+}
+
 // Elementos da interface
 const telas = {
     inicial: document.getElementById('telaInicial'),
@@ -21,13 +47,6 @@ const telas = {
 function mostrarTela(tela) {
     Object.values(telas).forEach(t => t.classList.remove('ativa'));
     telas[tela].classList.add('ativa');
-    
-    // Adicionar/remover classe no body para imagem de fundo
-    if (tela === 'inicial') {
-        document.body.classList.add('tela-inicial-ativa');
-    } else {
-        document.body.classList.remove('tela-inicial-ativa');
-    }
 }
 
 // Event Listeners - Tela Inicial
@@ -103,6 +122,11 @@ document.querySelectorAll('input[name="impostores"]').forEach(radio => {
 // Event Listeners - Rodada
 document.getElementById('btnIniciarVotacao').addEventListener('click', () => {
     socket.emit('iniciarVotacao', codigoSalaAtual);
+});
+
+// Event Listeners - Nova Rodada
+document.getElementById('btnNovaRodada').addEventListener('click', () => {
+    socket.emit('iniciarNovaRodada', codigoSalaAtual);
 });
 
 // Event Listeners - Fim de Jogo
@@ -209,7 +233,6 @@ socket.on('configuracaoAtualizada', (data) => {
 // Socket Events - Rodada Iniciada
 socket.on('rodadaIniciada', (data) => {
     document.getElementById('rodadaAtual').textContent = data.rodada;
-    document.getElementById('totalRodadas').textContent = data.totalRodadas;
     
     if (data.isImpostor) {
         document.getElementById('infoNormal').style.display = 'none';
@@ -306,6 +329,15 @@ socket.on('resultadoVotacao', (data) => {
     mostrarTela('resultado');
 });
 
+// Socket Events - Aguardando Próxima Rodada
+socket.on('aguardandoProximaRodada', (data) => {
+    // Mostrar botão de nova rodada apenas para o host
+    const controlesNovaRodada = document.getElementById('controlesNovaRodada');
+    if (controlesNovaRodada && isHost) {
+        controlesNovaRodada.style.display = 'block';
+    }
+});
+
 // Socket Events - Jogo Finalizado
 socket.on('jogoFinalizado', (data) => {
     const resultadoFinal = document.getElementById('resultadoFinal');
@@ -357,8 +389,72 @@ document.getElementById('btnVoltarEntrar').addEventListener('click', () => {
     document.getElementById('erroMensagem').classList.remove('ativo');
 });
 
-// Adicionar classe para imagem de fundo na tela inicial ao carregar
+// Função para atualizar status visual de conexão
+function atualizarStatusConexao(status, mensagem) {
+    const indicador = document.getElementById('statusIndicador');
+    const texto = document.getElementById('statusTexto');
+    
+    if (!indicador || !texto) return;
+
+    // Mapear status para classe CSS
+    const statusClasses = {
+        'conectado': ['conectado', 'Conectado'],
+        'desconectado': ['desconectado', 'Desconectado'],
+        'reconectando': ['reconectando', 'Reconectando...'],
+        'falha-reconexao': ['erro', 'Erro na reconexão'],
+        'pong-recebido': ['conectado', 'Conectado'],
+        'erro-conexao': ['erro', 'Erro de conexão'],
+        'wake-lock-ativo': ['conectado', 'Tela mantida ativa'],
+        'background-ping': ['conectado', 'Em background'],
+    };
+
+    const [classe, textoStatus] = statusClasses[status] || ['desconectado', mensagem];
+    
+    // Remover classes anteriores
+    indicador.className = 'status-indicador';
+    indicador.classList.add(classe);
+    texto.textContent = textoStatus;
+}
+
+// Adicionar classe para imagem de fundo apenas na tela inicial
 document.addEventListener('DOMContentLoaded', () => {
     document.body.classList.add('tela-inicial-ativa');
+    inicializarGerenciadores();
+
+    // Listener para voltar para tela inicial
+    document.addEventListener('click', (e) => {
+        if (e.target.id === 'btnVoltarCriar' || e.target.id === 'btnVoltarEntrar') {
+            document.body.classList.add('tela-inicial-ativa');
+        } else if (e.target.id === 'btnCriarSala' || e.target.id === 'btnEntrarSala') {
+            document.body.classList.remove('tela-inicial-ativa');
+        }
+    });
+
+    // Listener para visibilidade da página (quando volta do background)
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+            // Página voltou ao foco
+            console.log('[App] Página voltou ao foco');
+            if (heartbeatManager) {
+                heartbeatManager.startHeartbeat();
+            }
+        } else {
+            // Página entrou em background
+            console.log('[App] Página entrou em background');
+            // O heartbeat continuará rodando via Service Worker
+        }
+    });
+
+    // Tentar reconectar se a página voltar online
+    window.addEventListener('online', () => {
+        console.log('[App] Conexão online detectada');
+        if (socket && !socket.connected) {
+            socket.connect();
+        }
+    });
+
+    window.addEventListener('offline', () => {
+        console.log('[App] Conexão offline detectada');
+    });
 });
 
