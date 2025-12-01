@@ -731,8 +731,15 @@ input[type="text"]::placeholder {
 }
 
 @media (max-width: 600px) {
+    body {
+        padding: 0;
+        overflow: hidden;
+    }
+
     .container {
-        padding: 20px;
+        padding: 15px;
+        max-width: 100%;
+        width: 100%;
     }
 
     .logo h1 {
@@ -749,7 +756,350 @@ input[type="text"]::placeholder {
     }
 
     .palavra-destaque {
+        font-size: 1.5em;
+    }
+
+    /* Layout Mobile da Tela de Rodada - Fixo sem Scroll */
+    .tela-rodada.ativa {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        width: 100vw;
+        padding: 0;
+        margin: 0;
+        overflow: hidden;
+        position: fixed;
+        top: 0;
+        left: 0;
+        background: white;
+    }
+
+    /* Header da Rodada - Compacto */
+    .header-rodada {
+        padding: 8px 12px;
+        margin: 0;
+        border-radius: 0;
+        flex-shrink: 0;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    .header-rodada h2 {
+        font-size: 1.2em;
+        margin: 0;
+    }
+
+    .header-rodada .btn-encerrar {
+        padding: 6px 12px;
+        font-size: 0.8em;
+        margin: 0;
+    }
+
+    /* Área Principal - Scroll apenas aqui se necessário */
+    .area-principal-rodada {
+        flex: 1;
+        overflow-y: auto;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    /* Info da Carta - Compacta */
+    .info-jogador {
+        padding: 15px;
+        margin: 0;
+        min-height: auto;
+        border-radius: 12px;
+        flex-shrink: 0;
+    }
+
+    .carta-container {
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+
+    .imagem-carta {
+        max-width: 140px;
+        max-height: 140px;
+        min-width: 140px;
+        border-width: 3px;
+    }
+
+    .carta-texto {
+        text-align: center;
+    }
+
+    .info-normal h3,
+    .info-impostor h3 {
+        font-size: 0.95em;
+        margin-bottom: 8px;
+    }
+
+    .palavra-destaque {
         font-size: 1.8em;
+        margin: 5px 0;
+    }
+
+    .instrucao {
+        font-size: 0.8em;
+        margin-top: 10px;
+        padding-top: 10px;
+    }
+
+    /* Seção de Jogadores + Dicas - Layout em Grid Horizontal */
+    .secao-inferior {
+        display: grid;
+        grid-template-columns: 1fr 2fr;
+        gap: 10px;
+        flex-shrink: 0;
+        max-height: 35vh;
+    }
+
+    /* Lista de Jogadores - Compacta à Esquerda */
+    .lista-jogadores-rodada {
+        background: #f0f4ff;
+        padding: 10px;
+        border-radius: 8px;
+        margin: 0;
+        overflow-y: auto;
+        border-right: none;
+    }
+
+    .lista-jogadores-rodada h3 {
+        font-size: 0.85em;
+        margin-bottom: 8px;
+        padding-bottom: 6px;
+        text-align: center;
+        border-bottom: 2px solid #667eea;
+    }
+
+    .lista-jogadores-rodada ul {
+        gap: 6px;
+    }
+
+    .lista-jogadores-rodada li {
+        padding: 8px;
+        font-size: 0.8em;
+        border-radius: 6px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        border-left: 3px solid #667eea;
+    }
+
+    /* Seção de Dicas - Compacta à Direita */
+    .secao-dicas-online {
+        padding: 10px;
+        margin: 0;
+        border-radius: 8px;
+        max-height: none;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        background: #fffef0;
+    }
+
+    .dicas-header {
+        margin-bottom: 8px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid #667eea;
+    }
+
+    .dicas-header h3 {
+        font-size: 0.85em;
+    }
+
+    .turno-info {
+        font-size: 0.75em;
+    }
+
+    .lista-dicas {
+        flex: 1;
+        padding: 8px;
+        margin-bottom: 8px;
+        min-height: auto;
+        max-height: none;
+        font-size: 0.8em;
+    }
+
+    .dica-item {
+        padding: 6px 10px;
+        margin-bottom: 6px;
+        font-size: 0.85em;
+        border-left-width: 2px;
+    }
+
+    .dica-item strong {
+        font-size: 0.9em;
+    }
+
+    .campo-enviar-dica {
+        margin-top: 8px;
+    }
+
+    .info-turno {
+        font-size: 0.8em;
+        margin-bottom: 6px;
+    }
+
+    .input-dica-grupo {
+        gap: 8px;
+    }
+
+    .input-dica-grupo input {
+        padding: 8px 10px;
+        font-size: 0.85em;
+    }
+
+    .input-dica-grupo button {
+        padding: 8px 12px;
+        font-size: 0.85em;
+    }
+
+    /* Mensagem de aguardo - Compacta */
+    .aguardando-dicas {
+        padding: 15px;
+        font-size: 0.9em;
+    }
+}
+
+/* Mobile Pequeno - Ajustes extras para telas muito pequenas */
+@media (max-width: 380px) {
+    .header-rodada h2 {
+        font-size: 1em;
+    }
+
+    .header-rodada .btn-encerrar {
+        padding: 5px 10px;
+        font-size: 0.75em;
+    }
+
+    .imagem-carta {
+        max-width: 120px;
+        max-height: 120px;
+        min-width: 120px;
+    }
+
+    .palavra-destaque {
+        font-size: 1.5em;
+    }
+
+    .info-normal h3,
+    .info-impostor h3 {
+        font-size: 0.85em;
+    }
+
+    .secao-inferior {
+        grid-template-columns: 90px 1fr;
+        gap: 8px;
+    }
+
+    .lista-jogadores-rodada h3 {
+        font-size: 0.75em;
+    }
+
+    .lista-jogadores-rodada li {
+        padding: 6px;
+        font-size: 0.7em;
+    }
+
+    .dicas-header h3 {
+        font-size: 0.75em;
+    }
+
+    .turno-info {
+        font-size: 0.7em;
+    }
+}
+
+/* Estilos para Tablets e Telas Médias (601px - 1199px) */
+@media (min-width: 601px) and (max-width: 1199px) {
+    body {
+        padding: 10px;
+    }
+
+    .container {
+        max-width: 95%;
+        padding: 20px;
+    }
+
+    /* Layout Tablet da Tela de Rodada */
+    .tela-rodada.ativa {
+        display: flex;
+        flex-direction: column;
+        height: 95vh;
+        overflow: hidden;
+    }
+
+    .header-rodada {
+        padding: 12px 15px;
+        flex-shrink: 0;
+    }
+
+    .header-rodada h2 {
+        font-size: 1.5em;
+    }
+
+    .header-rodada .btn-encerrar {
+        padding: 8px 15px;
+        font-size: 0.85em;
+    }
+
+    /* Seção Inferior - Grid Horizontal para Tablets */
+    .secao-inferior {
+        display: grid;
+        grid-template-columns: 200px 1fr;
+        flex: 1;
+        overflow: hidden;
+        gap: 15px;
+        padding: 15px;
+    }
+
+    .lista-jogadores-rodada {
+        background: #f0f4ff;
+        padding: 12px;
+        border-radius: 10px;
+        overflow-y: auto;
+        border-right: none;
+    }
+
+    .lista-jogadores-rodada h3 {
+        font-size: 1em;
+        margin-bottom: 10px;
+    }
+
+    .lista-jogadores-rodada li {
+        padding: 10px;
+        font-size: 0.9em;
+    }
+
+    .area-principal-rodada {
+        overflow-y: auto;
+        padding: 0;
+    }
+
+    .info-jogador {
+        padding: 20px;
+        margin-bottom: 15px;
+    }
+
+    .imagem-carta {
+        max-width: 180px;
+        max-height: 180px;
+        min-width: 180px;
+    }
+
+    .palavra-destaque {
+        font-size: 2.2em;
+    }
+
+    .secao-dicas-online {
+        padding: 15px;
+        max-height: 40vh;
+    }
+
+    .lista-dicas {
+        max-height: 200px;
     }
 }
 
@@ -982,16 +1332,48 @@ input[type="text"]::placeholder {
     /* Layout da Tela de Rodada - Estilo Gartic */
     .tela-rodada.ativa {
         display: flex;
+        flex-direction: column;
         height: calc(95vh - 60px);
         gap: 0;
         padding: 0;
         margin: 0;
     }
 
-    /* Lista de Jogadores à Esquerda (Sidebar) */
+    /* Header da Rodada - Desktop */
+    .header-rodada {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 15px 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 0;
+        margin: 0;
+        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+        flex-shrink: 0;
+    }
+
+    .header-rodada h2 {
+        color: white;
+        margin: 0;
+        font-size: 1.8em;
+    }
+
+    .header-rodada .btn-encerrar {
+        margin: 0;
+        padding: 10px 20px;
+        font-size: 0.9em;
+    }
+
+    /* Seção Inferior - Desktop (Grid com 2 colunas) */
+    .secao-inferior {
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        flex: 1;
+        overflow: hidden;
+    }
+
+    /* Lista de Jogadores - Desktop Sidebar Esquerda */
     .lista-jogadores-rodada {
-        width: 280px;
-        min-width: 280px;
         background: #f8f9fa;
         padding: 20px 15px;
         overflow-y: auto;
@@ -1034,10 +1416,12 @@ input[type="text"]::placeholder {
 
     /* Área Principal à Direita */
     .area-principal-rodada {
-        flex: 1;
         display: flex;
         flex-direction: column;
         padding: 20px 30px;
+        overflow-y: auto;
+        background: white;
+    }
         overflow-y: auto;
         background: white;
     }

@@ -113,65 +113,68 @@
 
         <!-- Tela Rodada -->
         <div id="telaRodada" class="tela tela-rodada">
-            <!-- Lista de Jogadores à Esquerda -->
-            <div class="lista-jogadores-rodada">
-                <h3>Jogadores na Partida</h3>
-                <ul id="listaJogadoresRodada"></ul>
+            <!-- Header com Rodada e Botão Encerrar -->
+            <div class="header-rodada">
+                <h2>Rodada <span id="rodadaAtual">1</span></h2>
+                <button id="btnEncerrarPartidaRodada" class="btn btn-encerrar" style="display: none;">Encerrar Partida</button>
             </div>
 
-            <!-- Área Principal à Direita -->
-            <div class="area-principal-rodada">
-                <!-- Header com Rodada e Botão Encerrar -->
-                <div class="header-rodada">
-                    <h2>Rodada <span id="rodadaAtual">1</span></h2>
-                    <button id="btnEncerrarPartidaRodada" class="btn btn-encerrar" style="display: none;">Encerrar Partida</button>
+            <!-- Seção Inferior: Jogadores + Dicas (Desktop: Grid / Mobile: Vertical) -->
+            <div class="secao-inferior">
+                <!-- Lista de Jogadores -->
+                <div class="lista-jogadores-rodada">
+                    <h3>Jogadores na Partida</h3>
+                    <ul id="listaJogadoresRodada"></ul>
                 </div>
-                
-                <!-- Info da Carta/Jogador -->
-                <div id="infoJogador" class="info-jogador">
-                    <div id="infoNormal" class="info-normal">
-                        <div class="carta-container">
-                            <img id="imagemCarta" class="imagem-carta" src="" alt="" style="display: none;">
-                            <div class="carta-texto">
-                                <h3>🎯 Sua Palavra Secreta:</h3>
-                                <div class="palavra-destaque" id="palavraSecreta"></div>
+
+                <!-- Área Principal -->
+                <div class="area-principal-rodada">
+                    <!-- Info da Carta/Jogador -->
+                    <div id="infoJogador" class="info-jogador">
+                        <div id="infoNormal" class="info-normal">
+                            <div class="carta-container">
+                                <img id="imagemCarta" class="imagem-carta" src="" alt="" style="display: none;">
+                                <div class="carta-texto">
+                                    <h3>🎯 Sua Palavra Secreta:</h3>
+                                    <div class="palavra-destaque" id="palavraSecreta"></div>
+                                </div>
+                            </div>
+                            <p class="instrucao">Dê dicas sobre esta carta sem falar o nome diretamente!</p>
+                        </div>
+                        <div id="infoImpostor" class="info-impostor" style="display: none;">
+                            <h3>🕵️ Você é o IMPOSTOR!</h3>
+                            <p class="instrucao">Você não sabe qual é a palavra. Tente descobrir e se misturar com os outros jogadores!</p>
+                        </div>
+                    </div>
+
+                    <!-- Seção de Dicas (Modo Online) -->
+                    <div id="secaoDicasOnline" class="secao-dicas-online" style="display: none;">
+                        <div class="dicas-header">
+                            <h3>📝 Dicas dos Jogadores</h3>
+                            <span id="turnoAtual" class="turno-info"></span>
+                        </div>
+                        
+                        <div id="listaDicas" class="lista-dicas">
+                            <!-- Dicas aparecerão aqui -->
+                        </div>
+                        
+                        <div id="campoEnviarDica" class="campo-enviar-dica" style="display: none;">
+                            <p class="info-turno">✅ É sua vez! Escreva sua dica:</p>
+                            <div class="input-dica-grupo">
+                                <input type="text" id="inputDica" placeholder="Digite sua dica sobre a carta..." maxlength="100">
+                                <button id="btnEnviarDica" class="btn btn-enviar-dica">Enviar</button>
                             </div>
                         </div>
-                        <p class="instrucao">Dê dicas sobre esta carta sem falar o nome diretamente!</p>
-                    </div>
-                    <div id="infoImpostor" class="info-impostor" style="display: none;">
-                        <h3>🕵️ Você é o IMPOSTOR!</h3>
-                        <p class="instrucao">Você não sabe qual é a palavra. Tente descobrir e se misturar com os outros jogadores!</p>
-                    </div>
-                </div>
-
-                <!-- Seção de Dicas (Modo Online) -->
-                <div id="secaoDicasOnline" class="secao-dicas-online" style="display: none;">
-                    <div class="dicas-header">
-                        <h3>📝 Dicas dos Jogadores</h3>
-                        <span id="turnoAtual" class="turno-info"></span>
-                    </div>
-                    
-                    <div id="listaDicas" class="lista-dicas">
-                        <!-- Dicas aparecerão aqui -->
-                    </div>
-                    
-                    <div id="campoEnviarDica" class="campo-enviar-dica" style="display: none;">
-                        <p class="info-turno">✅ É sua vez! Escreva sua dica:</p>
-                        <div class="input-dica-grupo">
-                            <input type="text" id="inputDica" placeholder="Digite sua dica sobre a carta..." maxlength="100">
-                            <button id="btnEnviarDica" class="btn btn-enviar-dica">Enviar</button>
+                        
+                        <div id="aguardandoTurno" class="aguardando-turno" style="display: none;">
+                            <p>⏳ Aguardando outros jogadores enviarem suas dicas...</p>
                         </div>
                     </div>
-                    
-                    <div id="aguardandoTurno" class="aguardando-turno" style="display: none;">
-                        <p>⏳ Aguardando outros jogadores enviarem suas dicas...</p>
-                    </div>
-                </div>
 
-                <!-- Controles do Host -->
-                <div id="controlesHost" class="controles-host" style="display: none;">
-                    <button id="btnIniciarVotacao" class="btn btn-votar">Iniciar Votação</button>
+                    <!-- Controles do Host -->
+                    <div id="controlesHost" class="controles-host" style="display: none;">
+                        <button id="btnIniciarVotacao" class="btn btn-votar">Iniciar Votação</button>
+                    </div>
                 </div>
             </div>
         </div>
