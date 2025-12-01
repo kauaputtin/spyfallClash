@@ -1,13 +1,14 @@
 /**
  * Sistema de Heartbeat e Reconexão Automática
  * Mantém o jogador conectado mesmo em situações desafiadoras
+ * Continua funcionando com tela desligada ou app minimizado
  */
 
 class HeartbeatManager {
     constructor(socket, options = {}) {
         this.socket = socket;
         this.pingInterval = options.pingInterval || 15000; // 15 segundos
-        this.pongTimeout = options.pongTimeout || 60000; // 60 segundos
+        this.pongTimeout = options.pongTimeout || 240000; // 4 minutos (menor que o timeout do servidor)
         this.maxReconnectAttempts = options.maxReconnectAttempts || 10;
         this.reconnectDelay = options.reconnectDelay || 3000; // 3 segundos
         
@@ -16,6 +17,7 @@ class HeartbeatManager {
         this.lastPongTime = Date.now();
         this.isConnected = false;
         this.statusCallback = options.statusCallback || (() => {});
+        this.backgroundMode = false; // Rastrear se está em background
         
         this.init();
     }
@@ -54,6 +56,17 @@ class HeartbeatManager {
             this.statusCallback('erro-conexao', `Erro de conexão: ${error.message}`);
             console.log('[Heartbeat] Erro de conexão:', error);
         });
+
+        // Monitorar visibilidade para ajustar comportamento mas NÃO parar heartbeat
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                this.backgroundMode = true;
+                console.log('[Heartbeat] Página em background - continuando heartbeat');
+            } else {
+                this.backgroundMode = false;
+                console.log('[Heartbeat] Página visível - heartbeat normal');
+            }
+        });
     }
 
     startHeartbeat() {
@@ -91,6 +104,9 @@ class HeartbeatManager {
     sendPing() {
         try {
             this.socket.emit('ping', { timestamp: Date.now() });
+            if (this.backgroundMode) {
+                console.log('[Heartbeat] Ping enviado em modo background');
+            }
         } catch (error) {
             console.error('[Heartbeat] Erro ao enviar ping:', error);
         }

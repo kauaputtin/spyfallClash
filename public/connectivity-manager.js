@@ -1,17 +1,17 @@
 /**
- * Manager de Conectividade com Suporte a Wake Lock e Background Execution
- * Integra: Service Worker, Wake Lock API, e detecção de atividade
+ * Manager de Conectividade com Suporte a Background Execution
+ * Integra: Service Worker, detecção de atividade e gerenciamento de visibilidade
+ * Mantém conexão ativa mesmo com tela desligada ou app minimizado
  */
 
 class ConnectivityManager {
     constructor(options = {}) {
-        this.enableWakeLock = options.enableWakeLock !== false;
         this.enableServiceWorker = options.enableServiceWorker !== false;
-        this.wakeLockedScreen = null;
         this.serviceWorkerPort = null;
         this.activityTimeout = options.activityTimeout || 300000; // 5 minutos
         this.lastActivityTime = Date.now();
         this.statusCallback = options.statusCallback || (() => {});
+        this.socket = options.socket || null; // Socket para controlar desconexão
         
         this.init();
     }
@@ -25,8 +25,11 @@ class ConnectivityManager {
         // Detectar atividade do usuário
         this.setupActivityDetection();
 
-        // Tentar ativar Wake Lock ao interagir com a página
-        this.setupWakeLockTriggers();
+        // Configurar detecção de visibilidade (não desconectar quando oculto)
+        this.setupVisibilityHandling();
+
+        // Detectar fechamento real da janela
+        this.setupWindowCloseDetection();
     }
 
     async registerServiceWorker() {
@@ -83,52 +86,53 @@ class ConnectivityManager {
         }, 60000);
     }
 
-    setupWakeLockTriggers() {
-        // Tentar ativar Wake Lock quando usar a página
-        const events = ['mousedown', 'keydown', 'touchstart'];
-        
-        events.forEach(event => {
-            document.addEventListener(event, () => {
-                if (!this.wakeLockedScreen) {
-                    this.requestWakeLock();
-                }
-            }, { passive: true });
+    setupVisibilityHandling() {
+        // Monitorar visibilidade da página mas NÃO desconectar quando oculta
+        // Isso permite que o usuário minimize ou desligue a tela sem perder a conexão
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                this.statusCallback('pagina-oculta', 'Página em background - mantendo conexão');
+                console.log('[Connectivity] Página oculta - mantendo conexão ativa');
+            } else {
+                this.statusCallback('pagina-visivel', 'Página visível novamente');
+                console.log('[Connectivity] Página visível novamente');
+            }
         });
     }
 
-    async requestWakeLock() {
-        if (!this.enableWakeLock || !('wakeLock' in navigator)) {
-            console.log('[Connectivity] Wake Lock não suportado ou desabilitado');
-            return;
-        }
+    setupWindowCloseDetection() {
+        // Desconectar APENAS quando a janela for realmente fechada
+        window.addEventListener('beforeunload', (e) => {
+            // Desconectar o socket quando a janela for fechada
+            if (this.socket && this.socket.connected) {
+                console.log('[Connectivity] Janela sendo fechada - desconectando socket');
+                this.socket.disconnect();
+            }
+        });
 
-        try {
-            this.wakeLockedScreen = await navigator.wakeLock.request('screen');
-            this.statusCallback('wake-lock-ativo', 'Tela mantida ativa');
-            console.log('[Connectivity] Wake Lock ativado');
-
-            // Liberar Wake Lock se a página perder foco
-            this.wakeLockedScreen.addEventListener('release', () => {
-                this.statusCallback('wake-lock-liberado', 'Tela pode dormir');
-                this.wakeLockedScreen = null;
-            });
-
-            // Recapturar Wake Lock se a página ganhar foco
-            document.addEventListener('visibilitychange', () => {
-                if (!document.hidden && !this.wakeLockedScreen) {
-                    this.requestWakeLock();
+        // Fallback para navegadores que não suportam beforeunload
+        window.addEventListener('pagehide', (e) => {
+            if (e.persisted) {
+                // Página está sendo colocada no cache (não fechada)
+                console.log('[Connectivity] Página em cache - mantendo conexão');
+            } else {
+                // Página está sendo fechada
+                if (this.socket && this.socket.connected) {
+                    console.log('[Connectivity] Página fechada - desconectando socket');
+                    this.socket.disconnect();
                 }
-            });
-        } catch (error) {
-            console.warn('[Connectivity] Erro ao solicitar Wake Lock:', error);
-        }
+            }
+        });
     }
 
-    async releaseWakeLock() {
-        if (this.wakeLockedScreen) {
-            await this.wakeLockedScreen.release();
-            this.wakeLockedScreen = null;
-            console.log('[Connectivity] Wake Lock liberado');
+    enableBackgroundSync() {
+        // Habilitar sincronização em background se suportado
+        if ('sync' in self.registration) {
+            self.registration.sync.register('sync-heartbeat').then(() => {
+                console.log('[Connectivity] Background Sync registrado');
+            }).catch(err => {
+                console.warn('[Connectivity] Erro ao registrar Background Sync:', err);
+            });
         }
     }
 
@@ -151,9 +155,9 @@ class ConnectivityManager {
 
     getStatus() {
         return {
-            wakeLockAtivo: this.wakeLockedScreen !== null,
             serviceWorkerAtivo: this.serviceWorkerPort !== null,
-            tempoInatividade: Date.now() - this.lastActivityTime
+            tempoInatividade: Date.now() - this.lastActivityTime,
+            paginaVisivel: !document.hidden
         };
     }
 }

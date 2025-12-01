@@ -4,6 +4,7 @@ let codigoSalaAtual = null;
 let isHost = false;
 let nomeJogador = '';
 let jogadores = [];
+let modoJogo = 'presencial'; // 'presencial' ou 'online'
 
 // Gerenciadores de Conectividade
 let heartbeatManager = null;
@@ -11,8 +12,9 @@ let connectivityManager = null;
 
 // Inicializar gerenciadores de conectividade
 function inicializarGerenciadores() {
-    // Criar ConnectivityManager para gerenciar Service Worker, Wake Lock, etc
+    // Criar ConnectivityManager para gerenciar Service Worker e detecção de fechamento
     connectivityManager = new ConnectivityManager({
+        socket: socket, // Passar socket para detectar fechamento de janela
         statusCallback: (status, mensagem) => {
             console.log(`[Conectividade] ${status}: ${mensagem}`);
             // Poderia usar isso para debug, mas não será mostrado por padrão
@@ -22,7 +24,7 @@ function inicializarGerenciadores() {
     // Criar HeartbeatManager para manter ping com servidor
     heartbeatManager = new HeartbeatManager(socket, {
         pingInterval: 15000,      // Ping a cada 15 segundos
-        pongTimeout: 60000,       // Timeout após 60 segundos sem pong
+        pongTimeout: 240000,      // Timeout após 4 minutos sem pong
         maxReconnectAttempts: 10,
         reconnectDelay: 3000,
         statusCallback: (status, mensagem) => {
@@ -40,13 +42,22 @@ const telas = {
     rodada: document.getElementById('telaRodada'),
     votacao: document.getElementById('telaVotacao'),
     resultado: document.getElementById('telaResultado'),
-    fimJogo: document.getElementById('telaFimJogo')
+    fimJogo: document.getElementById('telaFimJogo'),
+    partidaEncerrada: document.getElementById('telaPartidaEncerrada')
 };
 
 // Função para mudar de tela
 function mostrarTela(tela) {
     Object.values(telas).forEach(t => t.classList.remove('ativa'));
     telas[tela].classList.add('ativa');
+    
+    // Adicionar classe especial ao container quando estiver na tela de rodada
+    const container = document.querySelector('.container');
+    if (tela === 'rodada') {
+        container.classList.add('rodada-ativa');
+    } else {
+        container.classList.remove('rodada-ativa');
+    }
 }
 
 // Event Listeners - Tela Inicial
@@ -61,9 +72,12 @@ document.getElementById('btnEntrarSala').addEventListener('click', () => {
 // Event Listeners - Criar Sala
 document.getElementById('btnConfirmarCriar').addEventListener('click', () => {
     const nome = document.getElementById('nomeCriar').value.trim();
+    const modoSelecionado = document.querySelector('input[name="modoJogo"]:checked').value;
+    
     if (nome) {
         nomeJogador = nome;
-        socket.emit('criarSala', nome);
+        modoJogo = modoSelecionado;
+        socket.emit('criarSala', { nomeJogador: nome, modoJogo: modoSelecionado });
     }
 });
 
@@ -124,6 +138,41 @@ document.getElementById('btnIniciarVotacao').addEventListener('click', () => {
     socket.emit('iniciarVotacao', codigoSalaAtual);
 });
 
+// Event Listeners - Encerrar Partida
+document.getElementById('btnEncerrarPartidaRodada').addEventListener('click', () => {
+    if (confirm('Tem certeza que deseja encerrar a partida? Todos voltarão ao lobby.')) {
+        socket.emit('encerrarPartida', codigoSalaAtual);
+    }
+});
+
+document.getElementById('btnEncerrarPartidaVotacao').addEventListener('click', () => {
+    if (confirm('Tem certeza que deseja encerrar a partida? Todos voltarão ao lobby.')) {
+        socket.emit('encerrarPartida', codigoSalaAtual);
+    }
+});
+
+document.getElementById('btnEncerrarPartidaResultado').addEventListener('click', () => {
+    if (confirm('Tem certeza que deseja encerrar a partida? Todos voltarão ao lobby.')) {
+        socket.emit('encerrarPartida', codigoSalaAtual);
+    }
+});
+
+// Event Listeners - Enviar Dica (Modo Online)
+document.getElementById('btnEnviarDica').addEventListener('click', () => {
+    const dica = document.getElementById('inputDica').value.trim();
+    if (dica) {
+        socket.emit('enviarDica', { codigo: codigoSalaAtual, dica });
+        document.getElementById('inputDica').value = '';
+    }
+});
+
+// Pressionar Enter para enviar dica
+document.getElementById('inputDica').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        document.getElementById('btnEnviarDica').click();
+    }
+});
+
 // Event Listeners - Nova Rodada
 document.getElementById('btnNovaRodada').addEventListener('click', () => {
     socket.emit('iniciarNovaRodada', codigoSalaAtual);
@@ -142,6 +191,7 @@ document.getElementById('btnVoltarMenu').addEventListener('click', () => {
 socket.on('salaCriada', (data) => {
     codigoSalaAtual = data.codigo;
     isHost = data.isHost;
+    modoJogo = data.modoJogo || 'presencial';
     document.getElementById('codigoSalaDisplay').textContent = data.codigo;
     mostrarTela('sala');
     atualizarConfigHost();
@@ -151,8 +201,17 @@ socket.on('salaCriada', (data) => {
 socket.on('entrouSala', (data) => {
     codigoSalaAtual = data.codigo;
     isHost = data.isHost;
+    modoJogo = data.modoJogo || 'presencial';
     document.getElementById('codigoSalaDisplay').textContent = data.codigo;
-    mostrarTela('sala');
+    
+    // Se partida já está em andamento, mostrar mensagem
+    if (data.estadoSala && data.estadoSala !== 'aguardando' && data.estadoSala !== 'configurando') {
+        mostrarTela('sala');
+        alert('Partida já em andamento. Você entrará na próxima rodada!');
+    } else {
+        mostrarTela('sala');
+    }
+    
     atualizarConfigHost();
     document.getElementById('erroMensagem').classList.remove('ativo');
 });
@@ -162,6 +221,13 @@ socket.on('erro', (data) => {
     const erroDiv = document.getElementById('erroMensagem');
     erroDiv.textContent = data.mensagem;
     erroDiv.classList.add('ativo');
+});
+
+// Socket Events - Dica Duplicada
+socket.on('dicaDuplicada', (data) => {
+    alert(data.mensagem);
+    console.log(`[Dica Duplicada] ${data.mensagem}`);
+    // Input fica disponível para jogador tentar novamente
 });
 
 // Socket Events - Atualizar Jogadores
@@ -220,6 +286,11 @@ function atualizarConfigHost() {
     if (controlesHost) {
         controlesHost.style.display = isHost ? 'block' : 'none';
     }
+
+    const controlesHostVotacao = document.getElementById('controlesHostVotacao');
+    if (controlesHostVotacao) {
+        controlesHostVotacao.style.display = isHost ? 'block' : 'none';
+    }
 }
 
 // Socket Events - Configuração Atualizada
@@ -234,14 +305,48 @@ socket.on('configuracaoAtualizada', (data) => {
 socket.on('rodadaIniciada', (data) => {
     document.getElementById('rodadaAtual').textContent = data.rodada;
     
+    const imagemCarta = document.getElementById('imagemCarta');
+    const secaoDicasOnline = document.getElementById('secaoDicasOnline');
+    
+    // Atualizar modoJogo se recebido
+    if (data.modoJogo) {
+        modoJogo = data.modoJogo;
+    }
+    
     if (data.isImpostor) {
         document.getElementById('infoNormal').style.display = 'none';
         document.getElementById('infoImpostor').style.display = 'block';
         document.getElementById('palavraSecreta').textContent = '';
+        imagemCarta.style.display = 'none'; // Impostor não vê imagem
     } else {
         document.getElementById('infoNormal').style.display = 'block';
         document.getElementById('infoImpostor').style.display = 'none';
         document.getElementById('palavraSecreta').textContent = data.palavra;
+        
+        // Exibir imagem da carta se disponível
+        if (data.imagemCarta) {
+            imagemCarta.src = `/imagens/cartas/${data.imagemCarta}`;
+            imagemCarta.alt = data.palavra;
+            imagemCarta.style.display = 'block';
+        } else {
+            imagemCarta.style.display = 'none';
+        }
+    }
+    
+    // Mostrar seção de dicas se modo online
+    if (modoJogo === 'online') {
+        secaoDicasOnline.style.display = 'block';
+        document.getElementById('listaDicas').innerHTML = ''; // Limpar dicas anteriores
+        document.getElementById('campoEnviarDica').style.display = 'none';
+        document.getElementById('aguardandoTurno').style.display = 'none';
+        // Ocultar botão de votação até completar 3 turnos
+        document.getElementById('btnIniciarVotacao').style.display = 'none';
+    } else {
+        secaoDicasOnline.style.display = 'none';
+        // Mostrar botão de votação no modo presencial
+        if (isHost) {
+            document.getElementById('btnIniciarVotacao').style.display = 'inline-block';
+        }
     }
     
     mostrarTela('rodada');
@@ -298,6 +403,7 @@ socket.on('resultadoVotacao', (data) => {
     const resultadoDiv = document.getElementById('resultadoConteudo');
     const palavraDiv = document.getElementById('resultadoPalavra');
     const votosDiv = document.getElementById('resultadoVotos');
+    const imagemCartaResultado = document.getElementById('imagemCartaResultado');
     
     resultadoDiv.innerHTML = '';
     
@@ -310,6 +416,15 @@ socket.on('resultadoVotacao', (data) => {
             <p><strong>${maisVotado.nome}</strong> foi o mais votado.</p>
             <p>${maisVotado.isImpostor ? 'Era realmente o impostor!' : 'Não era o impostor!'}</p>
         `;
+    }
+    
+    // Exibir imagem da carta no resultado (todos veem)
+    if (data.imagemCarta) {
+        imagemCartaResultado.src = `/imagens/cartas/${data.imagemCarta}`;
+        imagemCartaResultado.alt = data.palavraCorreta;
+        imagemCartaResultado.style.display = 'block';
+    } else {
+        imagemCartaResultado.style.display = 'none';
     }
     
     palavraDiv.innerHTML = `<p><strong>Palavra correta:</strong> ${data.palavraCorreta}</p>`;
@@ -338,6 +453,75 @@ socket.on('aguardandoProximaRodada', (data) => {
     }
 });
 
+// Socket Events - Partida Encerrada
+socket.on('partidaEncerrada', () => {
+    console.log('Partida encerrada pelo host');
+    
+    // Mostrar tela de partida encerrada
+    mostrarTela('partidaEncerrada');
+    
+    // Após 3 segundos, voltar ao lobby
+    setTimeout(() => {
+        mostrarTela('sala');
+        atualizarConfigHost();
+    }, 3000);
+});
+
+// Socket Events - Modo Online: Atualizar Turno
+socket.on('atualizarTurno', (data) => {
+    const campoEnviarDica = document.getElementById('campoEnviarDica');
+    const aguardandoTurno = document.getElementById('aguardandoTurno');
+    const turnoAtual = document.getElementById('turnoAtual');
+    
+    turnoAtual.textContent = `Turno de: ${data.jogadorNome}`;
+    
+    if (data.jogadorId === socket.id) {
+        // É meu turno
+        campoEnviarDica.style.display = 'block';
+        aguardandoTurno.style.display = 'none';
+        document.getElementById('inputDica').focus();
+    } else {
+        // Não é meu turno
+        campoEnviarDica.style.display = 'none';
+        aguardandoTurno.style.display = 'block';
+    }
+});
+
+// Socket Events - Modo Online: Nova Dica Enviada
+socket.on('novaDica', (data) => {
+    const listaDicas = document.getElementById('listaDicas');
+    
+    const dicaElement = document.createElement('div');
+    dicaElement.className = 'dica-item';
+    dicaElement.innerHTML = `
+        <span class="dica-jogador">${data.jogadorNome}:</span>
+        <span class="dica-texto">${data.dica}</span>
+    `;
+    
+    listaDicas.appendChild(dicaElement);
+    
+    // Scroll para a última dica
+    listaDicas.scrollTop = listaDicas.scrollHeight;
+});
+
+// Socket Events - Modo Online: Todas Dicas Enviadas
+socket.on('todasDicasEnviadas', (data) => {
+    document.getElementById('campoEnviarDica').style.display = 'none';
+    document.getElementById('aguardandoTurno').style.display = 'none';
+    document.getElementById('turnoAtual').textContent = '✅ Todas as 3 rodadas de dicas foram enviadas!';
+    
+    // Mostrar botão de votação apenas para o host
+    if (data.mostrarBotaoVotacao && isHost) {
+        document.getElementById('btnIniciarVotacao').style.display = 'inline-block';
+    }
+});
+
+// Socket Events - Modo Online: Rodada de Dicas Completa
+socket.on('rodadaDicasCompleta', (data) => {
+    const rodadaAtual = data.rodadaAtual + 1; // Converter 0,1,2 para 1,2,3
+    document.getElementById('turnoAtual').textContent = `✅ Rodada ${rodadaAtual - 1}/3 concluída! Iniciando rodada ${rodadaAtual}/3...`;
+});
+
 // Socket Events - Jogo Finalizado
 socket.on('jogoFinalizado', (data) => {
     const resultadoFinal = document.getElementById('resultadoFinal');
@@ -363,19 +547,6 @@ socket.on('jogoFinalizado', (data) => {
 socket.on('tornouHost', (data) => {
     isHost = true;
     atualizarConfigHost();
-});
-
-// Enter key para inputs
-document.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-        if (document.getElementById('nomeCriar').value.trim()) {
-            document.getElementById('btnConfirmarCriar').click();
-        }
-        if (document.getElementById('codigoSala').value.trim() && 
-            document.getElementById('nomeEntrar').value.trim()) {
-            document.getElementById('btnConfirmarEntrar').click();
-        }
-    }
 });
 
 // Limpar inputs ao voltar
