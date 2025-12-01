@@ -31,12 +31,42 @@
 
         <!-- Tela Criar Sala -->
         <div id="telaCriarSala" class="tela">
-            <h2>Criar Nova Sala</h2>
+            <div class="header-criar">
+                <h2>Criar Nova Sala</h2>
+                <button id="btnVoltarCriar" class="btn btn-voltar">Voltar</button>
+            </div>
+            
             <div class="form-group">
                 <input type="text" id="nomeCriar" placeholder="Seu nome" maxlength="20" required>
-                <button id="btnConfirmarCriar" class="btn btn-primario">Criar</button>
+                
+                <div class="modo-jogo-selecao">
+                    <label class="modo-titulo">Modo de Jogo:</label>
+                    <div class="radio-group-vertical">
+                        <label class="radio-modo">
+                            <input type="radio" name="modoJogo" value="presencial" checked>
+                            <span class="radio-content">
+                                <span class="radio-icon">👥</span>
+                                <span class="radio-text">
+                                    <strong>Presencial</strong>
+                                    <small>Dicas faladas</small>
+                                </span>
+                            </span>
+                        </label>
+                        <label class="radio-modo">
+                            <input type="radio" name="modoJogo" value="online">
+                            <span class="radio-content">
+                                <span class="radio-icon">💻</span>
+                                <span class="radio-text">
+                                    <strong>Online</strong>
+                                    <small>Dicas escritas</small>
+                                </span>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+                
+                <button id="btnConfirmarCriar" class="btn btn-primario btn-criar-centralizado">Criar</button>
             </div>
-            <button id="btnVoltarCriar" class="btn btn-voltar">Voltar</button>
         </div>
 
         <!-- Tela Entrar em Sala -->
@@ -82,30 +112,67 @@
         </div>
 
         <!-- Tela Rodada -->
-        <div id="telaRodada" class="tela">
-            <div class="header-rodada">
-                <h2>Rodada <span id="rodadaAtual">1</span></h2>
-            </div>
-            
-            <div id="infoJogador" class="info-jogador">
-                <div id="infoNormal" class="info-normal">
-                    <h3>🎯 Sua Palavra Secreta:</h3>
-                    <div class="palavra-destaque" id="palavraSecreta"></div>
-                    <p class="instrucao">Dê dicas sobre esta carta sem falar o nome diretamente!</p>
-                </div>
-                <div id="infoImpostor" class="info-impostor" style="display: none;">
-                    <h3>🕵️ Você é o IMPOSTOR!</h3>
-                    <p class="instrucao">Você não sabe qual é a palavra. Tente descobrir e se misturar com os outros jogadores!</p>
-                </div>
-            </div>
-
+        <div id="telaRodada" class="tela tela-rodada">
+            <!-- Lista de Jogadores à Esquerda -->
             <div class="lista-jogadores-rodada">
                 <h3>Jogadores na Partida</h3>
                 <ul id="listaJogadoresRodada"></ul>
             </div>
 
-            <div id="controlesHost" class="controles-host" style="display: none;">
-                <button id="btnIniciarVotacao" class="btn btn-votar">Iniciar Votação</button>
+            <!-- Área Principal à Direita -->
+            <div class="area-principal-rodada">
+                <!-- Header com Rodada e Botão Encerrar -->
+                <div class="header-rodada">
+                    <h2>Rodada <span id="rodadaAtual">1</span></h2>
+                    <button id="btnEncerrarPartidaRodada" class="btn btn-encerrar" style="display: none;">Encerrar Partida</button>
+                </div>
+                
+                <!-- Info da Carta/Jogador -->
+                <div id="infoJogador" class="info-jogador">
+                    <div id="infoNormal" class="info-normal">
+                        <div class="carta-container">
+                            <img id="imagemCarta" class="imagem-carta" src="" alt="" style="display: none;">
+                            <div class="carta-texto">
+                                <h3>🎯 Sua Palavra Secreta:</h3>
+                                <div class="palavra-destaque" id="palavraSecreta"></div>
+                            </div>
+                        </div>
+                        <p class="instrucao">Dê dicas sobre esta carta sem falar o nome diretamente!</p>
+                    </div>
+                    <div id="infoImpostor" class="info-impostor" style="display: none;">
+                        <h3>🕵️ Você é o IMPOSTOR!</h3>
+                        <p class="instrucao">Você não sabe qual é a palavra. Tente descobrir e se misturar com os outros jogadores!</p>
+                    </div>
+                </div>
+
+                <!-- Seção de Dicas (Modo Online) -->
+                <div id="secaoDicasOnline" class="secao-dicas-online" style="display: none;">
+                    <div class="dicas-header">
+                        <h3>📝 Dicas dos Jogadores</h3>
+                        <span id="turnoAtual" class="turno-info"></span>
+                    </div>
+                    
+                    <div id="listaDicas" class="lista-dicas">
+                        <!-- Dicas aparecerão aqui -->
+                    </div>
+                    
+                    <div id="campoEnviarDica" class="campo-enviar-dica" style="display: none;">
+                        <p class="info-turno">✅ É sua vez! Escreva sua dica:</p>
+                        <div class="input-dica-grupo">
+                            <input type="text" id="inputDica" placeholder="Digite sua dica sobre a carta..." maxlength="100">
+                            <button id="btnEnviarDica" class="btn btn-enviar-dica">Enviar</button>
+                        </div>
+                    </div>
+                    
+                    <div id="aguardandoTurno" class="aguardando-turno" style="display: none;">
+                        <p>⏳ Aguardando outros jogadores enviarem suas dicas...</p>
+                    </div>
+                </div>
+
+                <!-- Controles do Host -->
+                <div id="controlesHost" class="controles-host" style="display: none;">
+                    <button id="btnIniciarVotacao" class="btn btn-votar">Iniciar Votação</button>
+                </div>
             </div>
         </div>
 
@@ -124,6 +191,10 @@
                 <h3>Votos Parciais</h3>
                 <ul id="listaVotosParciais"></ul>
             </div>
+
+            <div id="controlesHostVotacao" class="controles-host" style="display: none;">
+                <button id="btnEncerrarPartidaVotacao" class="btn btn-encerrar">Encerrar Partida</button>
+            </div>
         </div>
 
         <!-- Tela Resultado -->
@@ -131,10 +202,12 @@
             <div class="resultado-votacao">
                 <h2>Resultado da Votação</h2>
                 <div id="resultadoConteudo"></div>
+                <img id="imagemCartaResultado" class="imagem-carta-resultado" src="" alt="" style="display: none;">
                 <div id="resultadoPalavra" class="palavra-resultado"></div>
                 <div id="resultadoVotos" class="votos-resultado"></div>
                 <div id="controlesNovaRodada" class="controles-nova-rodada" style="display: none;">
                     <button id="btnNovaRodada" class="btn btn-iniciar">Nova Rodada</button>
+                    <button id="btnEncerrarPartidaResultado" class="btn btn-encerrar">Encerrar Partida</button>
                 </div>
             </div>
         </div>
@@ -146,6 +219,15 @@
                 <div id="resultadoFinal"></div>
                 <button id="btnNovaPartida" class="btn btn-primario">Nova Partida</button>
                 <button id="btnVoltarMenu" class="btn btn-secundario">Voltar ao Menu</button>
+            </div>
+        </div>
+
+        <!-- Tela Partida Encerrada -->
+        <div id="telaPartidaEncerrada" class="tela">
+            <div class="partida-encerrada">
+                <h2>⚠️ Partida Encerrada</h2>
+                <p class="mensagem-encerrada">O host encerrou a partida.</p>
+                <p class="info">Voltando ao lobby...</p>
             </div>
         </div>
     </div>
