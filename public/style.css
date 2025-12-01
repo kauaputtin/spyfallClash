@@ -293,6 +293,12 @@ input[type="text"]::placeholder {
     font-size: 1.8em;
 }
 
+.header-acoes {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
 #codigoSalaDisplay {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
@@ -300,6 +306,26 @@ input[type="text"]::placeholder {
     border-radius: 8px;
     letter-spacing: 3px;
     font-family: 'Courier New', monospace;
+}
+
+.btn-sair-sala {
+    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+    color: white;
+    padding: 10px 20px;
+    font-size: 0.9em;
+    border: 2px solid #c92a2a;
+    box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+}
+
+.btn-sair-sala:hover {
+    background: linear-gradient(135deg, #ee5a6f 0%, #ff6b6b 100%);
+    box-shadow: 0 6px 20px rgba(255, 107, 107, 0.5);
+    transform: translateY(-2px);
+}
+
+.btn-sair-sala:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 10px rgba(255, 107, 107, 0.3);
 }
 
 .config-host {
@@ -731,8 +757,13 @@ input[type="text"]::placeholder {
 }
 
 @media (max-width: 600px) {
+    body {
+        padding: 10px;
+    }
+
     .container {
-        padding: 20px;
+        padding: 15px;
+        max-width: 100%;
     }
 
     .logo h1 {
@@ -742,6 +773,16 @@ input[type="text"]::placeholder {
     .header-sala {
         flex-direction: column;
         align-items: flex-start;
+        gap: 15px;
+    }
+
+    .header-acoes {
+        width: 100%;
+    }
+
+    .header-acoes button {
+        flex: 1;
+        min-width: 120px;
     }
 
     .lista-votacao ul {
@@ -749,7 +790,305 @@ input[type="text"]::placeholder {
     }
 
     .palavra-destaque {
-        font-size: 1.8em;
+        font-size: 1.5em;
+    }
+
+    /* Layout Mobile - Tela de Rodada */
+    .tela-rodada.ativa {
+        display: flex;
+        flex-direction: column;
+        padding: 0;
+    }
+
+    /* Esconder lista de jogadores lateral no mobile */
+    .lista-jogadores-rodada {
+        display: none;
+    }
+
+    /* Área principal ocupa tudo */
+    .area-principal-rodada {
+        width: 100%;
+        padding: 10px;
+    }
+
+    /* Header compacto */
+    .header-rodada {
+        padding: 10px;
+        margin-bottom: 10px;
+        border-radius: 8px;
+    }
+
+    .header-rodada h2 {
+        font-size: 1.3em;
+    }
+
+    .header-rodada .btn-encerrar {
+        padding: 8px 12px;
+        font-size: 0.8em;
+    }
+
+    /* Info da carta mais compacta */
+    .info-jogador {
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+
+    .carta-container {
+        flex-direction: column;
+        align-items: center;
+        gap: 15px;
+    }
+
+    .imagem-carta {
+        max-width: 150px;
+        max-height: 150px;
+    }
+
+    .carta-texto {
+        text-align: center;
+    }
+
+    .info-normal h3,
+    .info-impostor h3 {
+        font-size: 1em;
+    }
+
+    .instrucao {
+        font-size: 0.85em;
+        margin-top: 10px;
+    }
+
+    /* Seção Inferior Mobile - Grid com jogadores e dicas */
+    .secao-inferior-mobile {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-bottom: 15px;
+    }
+
+    /* Lista de Jogadores Mobile - Lado Esquerdo */
+    .lista-jogadores-mobile {
+        background: #f8f9fa;
+        padding: 12px;
+        border-radius: 10px;
+        overflow-y: auto;
+        max-height: 250px;
+    }
+
+    .lista-jogadores-mobile h3 {
+        font-size: 0.9em;
+        margin-bottom: 10px;
+        color: #667eea;
+        text-align: center;
+        padding-bottom: 8px;
+        border-bottom: 2px solid #667eea;
+    }
+
+    .lista-jogadores-mobile ul {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .lista-jogadores-mobile li {
+        background: white;
+        padding: 8px;
+        border-radius: 6px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        font-size: 0.85em;
+        border-left: 3px solid #667eea;
+    }
+
+    /* Seção de Dicas Mobile - Lado Direito */
+    .secao-dicas-mobile {
+        background: #f8f9fa;
+        padding: 12px;
+        border-radius: 10px;
+        overflow-y: auto;
+        max-height: 250px;
+    }
+
+    .secao-dicas-mobile .dicas-header {
+        margin-bottom: 10px;
+        padding-bottom: 8px;
+        border-bottom: 2px solid #667eea;
+    }
+
+    .secao-dicas-mobile .dicas-header h3 {
+        font-size: 0.9em;
+        color: #667eea;
+        margin: 0 0 5px 0;
+    }
+
+    .secao-dicas-mobile .turno-info {
+        font-size: 0.75em;
+        color: #764ba2;
+    }
+
+    .secao-dicas-mobile .lista-dicas {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .secao-dicas-mobile .dica-item {
+        background: white;
+        padding: 8px;
+        border-radius: 6px;
+        border-left: 3px solid #667eea;
+        font-size: 0.85em;
+    }
+
+    .secao-dicas-mobile .dica-item strong {
+        color: #667eea;
+        display: block;
+        margin-bottom: 3px;
+    }
+
+    /* Esconder seção de dicas desktop no mobile */
+    .secao-dicas-online {
+        display: none !important;
+    }
+
+    /* Modal de Input de Dica Mobile */
+    .modal-dica-mobile {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+        padding: 20px;
+    }
+
+    .modal-dica-conteudo {
+        background: white;
+        padding: 25px;
+        border-radius: 15px;
+        width: 100%;
+        max-width: 400px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        animation: slideUp 0.3s ease-out;
+        position: relative;
+    }
+
+    @keyframes slideUp {
+        from {
+            transform: translateY(50px);
+            opacity: 0;
+        }
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+
+    /* Botão X para fechar modal */
+    .btn-fechar-modal {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        background: none;
+        border: none;
+        font-size: 1.5em;
+        color: #999;
+        cursor: pointer;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        transition: all 0.2s ease;
+        border-radius: 50%;
+    }
+
+    .btn-fechar-modal:hover {
+        background: #f5f5f5;
+        color: #333;
+        transform: rotate(90deg);
+    }
+
+    .modal-dica-conteudo h3 {
+        color: #667eea;
+        margin-bottom: 10px;
+        font-size: 1.2em;
+        text-align: center;
+        padding-right: 30px;
+    }
+
+    .info-turno-modal {
+        text-align: center;
+        color: #4CAF50;
+        font-weight: bold;
+        margin-bottom: 15px;
+        font-size: 0.9em;
+    }
+
+    .modal-dica-conteudo input {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid #667eea;
+        border-radius: 8px;
+        font-size: 1em;
+        margin-bottom: 15px;
+    }
+
+    .modal-dica-conteudo input:focus {
+        outline: none;
+        border-color: #764ba2;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .modal-dica-conteudo button:not(.btn-fechar-modal) {
+        width: 100%;
+        padding: 12px;
+        font-size: 1em;
+    }
+
+    /* Botão para abrir modal de dica */
+    .btn-abrir-modal-dica {
+        width: 100%;
+        margin-top: 10px;
+        padding: 10px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 0.9em;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+    }
+
+    .btn-abrir-modal-dica:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-abrir-modal-dica:active {
+        transform: translateY(0);
+    }
+
+    /* Controles do host */
+    .controles-host {
+        margin-top: 15px;
+    }
+}
+
+/* Esconder elementos mobile no desktop */
+@media (min-width: 601px) {
+    .secao-inferior-mobile,
+    .lista-jogadores-mobile,
+    .secao-dicas-mobile,
+    .modal-dica-mobile {
+        display: none !important;
     }
 }
 

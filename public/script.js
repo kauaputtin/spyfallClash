@@ -157,7 +157,7 @@ document.getElementById('btnEncerrarPartidaResultado').addEventListener('click',
     }
 });
 
-// Event Listeners - Enviar Dica (Modo Online)
+// Event Listeners - Enviar Dica (Modo Online) - Desktop
 document.getElementById('btnEnviarDica').addEventListener('click', () => {
     const dica = document.getElementById('inputDica').value.trim();
     if (dica) {
@@ -166,11 +166,41 @@ document.getElementById('btnEnviarDica').addEventListener('click', () => {
     }
 });
 
-// Pressionar Enter para enviar dica
+// Pressionar Enter para enviar dica - Desktop
 document.getElementById('inputDica').addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
         document.getElementById('btnEnviarDica').click();
     }
+});
+
+// Event Listeners - Enviar Dica (Modo Online) - Mobile
+document.getElementById('btnEnviarDicaMobile').addEventListener('click', () => {
+    const dica = document.getElementById('inputDicaMobile').value.trim();
+    if (dica) {
+        socket.emit('enviarDica', { codigo: codigoSalaAtual, dica });
+        document.getElementById('inputDicaMobile').value = '';
+        document.getElementById('modalDicaMobile').style.display = 'none';
+    }
+});
+
+// Pressionar Enter para enviar dica - Mobile
+document.getElementById('inputDicaMobile').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        document.getElementById('btnEnviarDicaMobile').click();
+    }
+});
+
+// Event Listeners - Fechar Modal de Dica Mobile
+document.getElementById('btnFecharModalDica').addEventListener('click', () => {
+    document.getElementById('modalDicaMobile').style.display = 'none';
+});
+
+// Event Listeners - Abrir Modal de Dica Mobile
+document.getElementById('btnAbrirModalDica').addEventListener('click', () => {
+    document.getElementById('modalDicaMobile').style.display = 'flex';
+    setTimeout(() => {
+        document.getElementById('inputDicaMobile').focus();
+    }, 100);
 });
 
 // Event Listeners - Nova Rodada
@@ -185,6 +215,14 @@ document.getElementById('btnNovaPartida').addEventListener('click', () => {
 
 document.getElementById('btnVoltarMenu').addEventListener('click', () => {
     location.reload();
+});
+
+// Event Listeners - Sair da Sala
+document.getElementById('btnSairSala').addEventListener('click', () => {
+    if (confirm('Tem certeza que deseja sair da sala?')) {
+        socket.emit('sairDaSala', codigoSalaAtual);
+        location.reload();
+    }
 });
 
 // Socket Events - Sala Criada
@@ -237,13 +275,24 @@ socket.on('atualizarJogadores', (listaJogadores) => {
     atualizarConfigHost();
 });
 
+// Socket Events - Novo Host
+socket.on('novoHost', (data) => {
+    isHost = (socket.id === data.novoHostId);
+    atualizarConfigHost();
+    if (isHost) {
+        alert('Você agora é o host da sala!');
+    }
+});
+
 function atualizarListaJogadores() {
     const lista = document.getElementById('listaJogadores');
     const quantidade = document.getElementById('quantidadeJogadores');
     const listaRodada = document.getElementById('listaJogadoresRodada');
+    const listaRodadaMobile = document.getElementById('listaJogadoresMobile');
     
     lista.innerHTML = '';
     if (listaRodada) listaRodada.innerHTML = '';
+    if (listaRodadaMobile) listaRodadaMobile.innerHTML = '';
     
     quantidade.textContent = jogadores.length;
     
@@ -255,6 +304,7 @@ function atualizarListaJogadores() {
         }
         lista.appendChild(li);
         
+        // Desktop
         if (listaRodada) {
             const liRodada = document.createElement('li');
             liRodada.textContent = jogador.nome;
@@ -262,6 +312,16 @@ function atualizarListaJogadores() {
                 liRodada.classList.add('host');
             }
             listaRodada.appendChild(liRodada);
+        }
+
+        // Mobile
+        if (listaRodadaMobile) {
+            const liMobile = document.createElement('li');
+            liMobile.textContent = jogador.nome;
+            if (jogador.id === socket.id && isHost) {
+                liMobile.classList.add('host');
+            }
+            listaRodadaMobile.appendChild(liMobile);
         }
     });
     
@@ -307,6 +367,7 @@ socket.on('rodadaIniciada', (data) => {
     
     const imagemCarta = document.getElementById('imagemCarta');
     const secaoDicasOnline = document.getElementById('secaoDicasOnline');
+    const secaoDicasMobile = document.getElementById('secaoDicasMobile');
     
     // Atualizar modoJogo se recebido
     if (data.modoJogo) {
@@ -335,14 +396,23 @@ socket.on('rodadaIniciada', (data) => {
     
     // Mostrar seção de dicas se modo online
     if (modoJogo === 'online') {
-        secaoDicasOnline.style.display = 'block';
-        document.getElementById('listaDicas').innerHTML = ''; // Limpar dicas anteriores
+        if (secaoDicasOnline) secaoDicasOnline.style.display = 'block';
+        if (secaoDicasMobile) secaoDicasMobile.style.display = 'block';
+        
+        document.getElementById('listaDicas').innerHTML = '';
+        const listaDicasMobile = document.getElementById('listaDicasMobile');
+        if (listaDicasMobile) listaDicasMobile.innerHTML = '';
+        
         document.getElementById('campoEnviarDica').style.display = 'none';
         document.getElementById('aguardandoTurno').style.display = 'none';
+        document.getElementById('modalDicaMobile').style.display = 'none';
+        
         // Ocultar botão de votação até completar 3 turnos
         document.getElementById('btnIniciarVotacao').style.display = 'none';
     } else {
-        secaoDicasOnline.style.display = 'none';
+        if (secaoDicasOnline) secaoDicasOnline.style.display = 'none';
+        if (secaoDicasMobile) secaoDicasMobile.style.display = 'none';
+        
         // Mostrar botão de votação no modo presencial
         if (isHost) {
             document.getElementById('btnIniciarVotacao').style.display = 'inline-block';
@@ -472,43 +542,73 @@ socket.on('atualizarTurno', (data) => {
     const campoEnviarDica = document.getElementById('campoEnviarDica');
     const aguardandoTurno = document.getElementById('aguardandoTurno');
     const turnoAtual = document.getElementById('turnoAtual');
+    const turnoAtualMobile = document.getElementById('turnoAtualMobile');
+    const modalDicaMobile = document.getElementById('modalDicaMobile');
+    const btnAbrirModalDica = document.getElementById('btnAbrirModalDica');
     
-    turnoAtual.textContent = `Turno de: ${data.jogadorNome}`;
+    // Atualizar texto do turno
+    if (turnoAtual) turnoAtual.textContent = `Turno de: ${data.jogadorNome}`;
+    if (turnoAtualMobile) turnoAtualMobile.textContent = `Turno: ${data.jogadorNome}`;
     
     if (data.jogadorId === socket.id) {
         // É meu turno
-        campoEnviarDica.style.display = 'block';
-        aguardandoTurno.style.display = 'none';
-        document.getElementById('inputDica').focus();
+        if (window.innerWidth <= 600) {
+            // Mobile: Mostrar modal e botão
+            if (modalDicaMobile) modalDicaMobile.style.display = 'flex';
+            if (btnAbrirModalDica) btnAbrirModalDica.style.display = 'block';
+            setTimeout(() => {
+                document.getElementById('inputDicaMobile').focus();
+            }, 100);
+        } else {
+            // Desktop: Mostrar campo inline
+            if (campoEnviarDica) campoEnviarDica.style.display = 'block';
+            if (aguardandoTurno) aguardandoTurno.style.display = 'none';
+            document.getElementById('inputDica').focus();
+        }
     } else {
         // Não é meu turno
-        campoEnviarDica.style.display = 'none';
-        aguardandoTurno.style.display = 'block';
+        if (campoEnviarDica) campoEnviarDica.style.display = 'none';
+        if (aguardandoTurno) aguardandoTurno.style.display = 'block';
+        if (modalDicaMobile) modalDicaMobile.style.display = 'none';
+        if (btnAbrirModalDica) btnAbrirModalDica.style.display = 'none';
     }
 });
 
 // Socket Events - Modo Online: Nova Dica Enviada
 socket.on('novaDica', (data) => {
     const listaDicas = document.getElementById('listaDicas');
+    const listaDicasMobile = document.getElementById('listaDicasMobile');
     
     const dicaElement = document.createElement('div');
     dicaElement.className = 'dica-item';
     dicaElement.innerHTML = `
-        <span class="dica-jogador">${data.jogadorNome}:</span>
-        <span class="dica-texto">${data.dica}</span>
+        <strong>${data.jogadorNome}:</strong>
+        <span>${data.dica}</span>
     `;
     
-    listaDicas.appendChild(dicaElement);
-    
-    // Scroll para a última dica
-    listaDicas.scrollTop = listaDicas.scrollHeight;
+    // Desktop
+    if (listaDicas) {
+        listaDicas.appendChild(dicaElement.cloneNode(true));
+        listaDicas.scrollTop = listaDicas.scrollHeight;
+    }
+
+    // Mobile
+    if (listaDicasMobile) {
+        listaDicasMobile.appendChild(dicaElement);
+        listaDicasMobile.scrollTop = listaDicasMobile.scrollHeight;
+    }
 });
 
 // Socket Events - Modo Online: Todas Dicas Enviadas
 socket.on('todasDicasEnviadas', (data) => {
     document.getElementById('campoEnviarDica').style.display = 'none';
     document.getElementById('aguardandoTurno').style.display = 'none';
-    document.getElementById('turnoAtual').textContent = '✅ Todas as 3 rodadas de dicas foram enviadas!';
+    
+    const turnoAtual = document.getElementById('turnoAtual');
+    const turnoAtualMobile = document.getElementById('turnoAtualMobile');
+    
+    if (turnoAtual) turnoAtual.textContent = '✅ Todas as 3 rodadas de dicas foram enviadas!';
+    if (turnoAtualMobile) turnoAtualMobile.textContent = '✅ Rodadas completas!';
     
     // Mostrar botão de votação apenas para o host
     if (data.mostrarBotaoVotacao && isHost) {

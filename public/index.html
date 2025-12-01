@@ -85,7 +85,10 @@
         <div id="telaSala" class="tela">
             <div class="header-sala">
                 <h2>Sala: <span id="codigoSalaDisplay"></span></h2>
-                <button id="btnCopiarCodigo" class="btn btn-copiar">📋 Copiar Código</button>
+                <div class="header-acoes">
+                    <button id="btnCopiarCodigo" class="btn btn-copiar">📋 Copiar Código</button>
+                    <button id="btnSairSala" class="btn btn-sair-sala">Sair da Sala</button>
+                </div>
             </div>
             
             <div id="configHost" class="config-host" style="display: none;">
@@ -145,10 +148,33 @@
                     </div>
                 </div>
 
-                <!-- Seção de Dicas (Modo Online) -->
+                <!-- Seção Inferior Mobile: Jogadores + Dicas -->
+                <div class="secao-inferior-mobile">
+                    <!-- Lista de Jogadores Mobile -->
+                    <div class="lista-jogadores-mobile">
+                        <h3>Jogadores na Partida</h3>
+                        <ul id="listaJogadoresMobile"></ul>
+                    </div>
+
+                    <!-- Seção de Dicas Mobile -->
+                    <div id="secaoDicasMobile" class="secao-dicas-mobile" style="display: none;">
+                        <div class="dicas-header">
+                            <h3>Dicas dos Jogadores</h3>
+                            <span id="turnoAtualMobile" class="turno-info"></span>
+                        </div>
+                        
+                        <div id="listaDicasMobile" class="lista-dicas">
+                            <!-- Dicas aparecerão aqui -->
+                        </div>
+                        
+                        <button id="btnAbrirModalDica" class="btn-abrir-modal-dica" style="display: none;">✍️ Escrever Dica</button>
+                    </div>
+                </div>
+
+                <!-- Seção de Dicas (Modo Online) - Desktop -->
                 <div id="secaoDicasOnline" class="secao-dicas-online" style="display: none;">
                     <div class="dicas-header">
-                        <h3>📝 Dicas dos Jogadores</h3>
+                        <h3>Dicas dos Jogadores</h3>
                         <span id="turnoAtual" class="turno-info"></span>
                     </div>
                     
@@ -173,6 +199,17 @@
                 <div id="controlesHost" class="controles-host" style="display: none;">
                     <button id="btnIniciarVotacao" class="btn btn-votar">Iniciar Votação</button>
                 </div>
+            </div>
+        </div>
+
+        <!-- Modal de Input de Dica Mobile -->
+        <div id="modalDicaMobile" class="modal-dica-mobile" style="display: none;">
+            <div class="modal-dica-conteudo">
+                <button id="btnFecharModalDica" class="btn-fechar-modal">✕</button>
+                <h3>✍️ Escreva sua dica</h3>
+                <p class="info-turno-modal">É sua vez de dar uma dica!</p>
+                <input type="text" id="inputDicaMobile" placeholder="Digite sua dica sobre a carta..." maxlength="100">
+                <button id="btnEnviarDicaMobile" class="btn btn-enviar-dica">Enviar Dica</button>
             </div>
         </div>
 

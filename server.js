@@ -317,6 +317,35 @@ io.on('connection', (socket) => {
     console.log(`${nomeJogador} entrou na sala ${codigo} (estado: ${sala.estado})`);
   });
 
+  // Sair da sala
+  socket.on('sairDaSala', (codigo) => {
+    const sala = salas.get(codigo);
+    if (!sala) return;
+
+    const jogadorIndex = sala.jogadores.findIndex(j => j.id === socket.id);
+    if (jogadorIndex !== -1) {
+      const jogador = sala.jogadores[jogadorIndex];
+      sala.jogadores.splice(jogadorIndex, 1);
+      socket.leave(codigo);
+      
+      // Se era o host, transferir para outro jogador ou deletar sala
+      if (socket.id === sala.host) {
+        if (sala.jogadores.length > 0) {
+          sala.host = sala.jogadores[0].id;
+          io.to(codigo).emit('novoHost', { novoHostId: sala.host });
+          console.log(`Host transferido para ${sala.jogadores[0].nome} na sala ${codigo}`);
+        } else {
+          salas.delete(codigo);
+          console.log(`Sala ${codigo} deletada (sem jogadores)`);
+          return;
+        }
+      }
+      
+      io.to(codigo).emit('atualizarJogadores', sala.jogadores);
+      console.log(`${jogador.nome} saiu da sala ${codigo}`);
+    }
+  });
+
   // Configurar quantidade de impostores (apenas host)
   socket.on('configurarImpostores', ({ codigo, quantidade }) => {
     const sala = salas.get(codigo);
