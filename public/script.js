@@ -1,10 +1,47 @@
-const socket = io();
+const STORAGE_KEYS = {
+    playerId: 'spyfallClash.playerId',
+    codigoSala: 'spyfallClash.codigoSala',
+    nomeJogador: 'spyfallClash.nomeJogador'
+};
+
+function gerarPlayerIdLocal() {
+    return `jogador_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+let playerId = localStorage.getItem(STORAGE_KEYS.playerId);
+if (!playerId) {
+    playerId = gerarPlayerIdLocal();
+    localStorage.setItem(STORAGE_KEYS.playerId, playerId);
+}
+
+const socket = io({
+    auth: { playerId }
+});
 
 let codigoSalaAtual = null;
 let isHost = false;
-let nomeJogador = '';
+let nomeJogador = localStorage.getItem(STORAGE_KEYS.nomeJogador) || '';
 let jogadores = [];
 let modoJogo = 'presencial'; // 'presencial' ou 'online'
+
+function salvarSessaoLocal(codigo, nome, id = playerId) {
+    codigoSalaAtual = codigo;
+    playerId = id || playerId;
+    if (playerId) {
+        localStorage.setItem(STORAGE_KEYS.playerId, playerId);
+        socket.auth = { playerId };
+    }
+    if (codigo) localStorage.setItem(STORAGE_KEYS.codigoSala, codigo);
+    if (nome) {
+        nomeJogador = nome;
+        localStorage.setItem(STORAGE_KEYS.nomeJogador, nome);
+    }
+}
+
+function limparSessaoSala() {
+    localStorage.removeItem(STORAGE_KEYS.codigoSala);
+    localStorage.removeItem(STORAGE_KEYS.nomeJogador);
+}
 
 // Gerenciadores de Conectividade
 let heartbeatManager = null;
@@ -77,7 +114,7 @@ document.getElementById('btnConfirmarCriar').addEventListener('click', () => {
     if (nome) {
         nomeJogador = nome;
         modoJogo = modoSelecionado;
-        socket.emit('criarSala', { nomeJogador: nome, modoJogo: modoSelecionado });
+        socket.emit('criarSala', { nomeJogador: nome, modoJogo: modoSelecionado, playerId });
     }
 });
 
@@ -92,7 +129,7 @@ document.getElementById('btnConfirmarEntrar').addEventListener('click', () => {
     
     if (codigo && nome) {
         nomeJogador = nome;
-        socket.emit('entrarSala', { codigo, nomeJogador: nome });
+        socket.emit('entrarSala', { codigo, nomeJogador: nome, playerId });
     }
 });
 
@@ -221,13 +258,36 @@ document.getElementById('btnVoltarMenu').addEventListener('click', () => {
 document.getElementById('btnSairSala').addEventListener('click', () => {
     if (confirm('Tem certeza que deseja sair da sala?')) {
         socket.emit('sairDaSala', codigoSalaAtual);
+        limparSessaoSala();
         location.reload();
     }
 });
 
 // Socket Events - Sala Criada
+socket.on('connect', () => {
+    const codigoSalvo = localStorage.getItem(STORAGE_KEYS.codigoSala);
+    const playerIdSalvo = localStorage.getItem(STORAGE_KEYS.playerId);
+    if (codigoSalvo && playerIdSalvo) {
+        socket.emit('retomarSessao', { codigo: codigoSalvo, playerId: playerIdSalvo });
+    }
+});
+
+socket.on('sessaoRestaurada', (data) => {
+    salvarSessaoLocal(data.codigo, data.nomeJogador || nomeJogador, data.playerId);
+    isHost = data.isHost;
+    modoJogo = data.modoJogo || 'presencial';
+    document.getElementById('codigoSalaDisplay').textContent = data.codigo;
+    mostrarTela('sala');
+    atualizarConfigHost();
+    document.getElementById('erroMensagem').classList.remove('ativo');
+});
+
+socket.on('sessaoNaoEncontrada', () => {
+    limparSessaoSala();
+});
+
 socket.on('salaCriada', (data) => {
-    codigoSalaAtual = data.codigo;
+    salvarSessaoLocal(data.codigo, data.nomeJogador || nomeJogador, data.playerId);
     isHost = data.isHost;
     modoJogo = data.modoJogo || 'presencial';
     document.getElementById('codigoSalaDisplay').textContent = data.codigo;
@@ -237,7 +297,7 @@ socket.on('salaCriada', (data) => {
 
 // Socket Events - Entrou na Sala
 socket.on('entrouSala', (data) => {
-    codigoSalaAtual = data.codigo;
+    salvarSessaoLocal(data.codigo, data.nomeJogador || nomeJogador, data.playerId);
     isHost = data.isHost;
     modoJogo = data.modoJogo || 'presencial';
     document.getElementById('codigoSalaDisplay').textContent = data.codigo;
@@ -277,7 +337,7 @@ socket.on('atualizarJogadores', (listaJogadores) => {
 
 // Socket Events - Novo Host
 socket.on('novoHost', (data) => {
-    isHost = (socket.id === data.novoHostId);
+    isHost = (playerId === data.novoHostId);
     atualizarConfigHost();
     if (isHost) {
         alert('Você agora é o host da sala!');
@@ -297,9 +357,10 @@ function atualizarListaJogadores() {
     quantidade.textContent = jogadores.length;
     
     jogadores.forEach(jogador => {
+        const nomeExibicao = jogador.online === false ? `${jogador.nome} (offline)` : jogador.nome;
         const li = document.createElement('li');
-        li.textContent = jogador.nome;
-        if (jogador.id === socket.id && isHost) {
+        li.textContent = nomeExibicao;
+        if (jogador.id === playerId && isHost) {
             li.classList.add('host');
         }
         lista.appendChild(li);
@@ -307,8 +368,8 @@ function atualizarListaJogadores() {
         // Desktop
         if (listaRodada) {
             const liRodada = document.createElement('li');
-            liRodada.textContent = jogador.nome;
-            if (jogador.id === socket.id && isHost) {
+            liRodada.textContent = nomeExibicao;
+            if (jogador.id === playerId && isHost) {
                 liRodada.classList.add('host');
             }
             listaRodada.appendChild(liRodada);
@@ -317,8 +378,8 @@ function atualizarListaJogadores() {
         // Mobile
         if (listaRodadaMobile) {
             const liMobile = document.createElement('li');
-            liMobile.textContent = jogador.nome;
-            if (jogador.id === socket.id && isHost) {
+            liMobile.textContent = nomeExibicao;
+            if (jogador.id === playerId && isHost) {
                 liMobile.classList.add('host');
             }
             listaRodadaMobile.appendChild(liMobile);
@@ -379,18 +440,26 @@ socket.on('rodadaIniciada', (data) => {
         document.getElementById('infoImpostor').style.display = 'block';
         document.getElementById('palavraSecreta').textContent = '';
         imagemCarta.style.display = 'none'; // Impostor não vê imagem
+        imagemCarta.removeAttribute('src');
+        imagemCarta.removeAttribute('alt');
     } else {
+        const nomeCarta = data.carta?.nome || data.palavra;
+        const arquivoImagemCarta = data.carta?.imagem || data.imagemCarta;
+
         document.getElementById('infoNormal').style.display = 'block';
         document.getElementById('infoImpostor').style.display = 'none';
-        document.getElementById('palavraSecreta').textContent = data.palavra;
-        
+        document.getElementById('palavraSecreta').textContent = nomeCarta;
+
         // Exibir imagem da carta se disponível
-        if (data.imagemCarta) {
-            imagemCarta.src = `/imagens/cartas/${data.imagemCarta}`;
-            imagemCarta.alt = data.palavra;
+        if (arquivoImagemCarta) {
+            imagemCarta.src = `/imagens/cartas/${arquivoImagemCarta}`;
+            imagemCarta.alt = nomeCarta;
+            imagemCarta.title = nomeCarta;
             imagemCarta.style.display = 'block';
         } else {
             imagemCarta.style.display = 'none';
+            imagemCarta.removeAttribute('src');
+            imagemCarta.removeAttribute('alt');
         }
     }
     
@@ -429,7 +498,7 @@ socket.on('votacaoIniciada', (data) => {
     lista.innerHTML = '';
     
     data.jogadores.forEach(jogador => {
-        if (jogador.id !== socket.id) {
+        if (jogador.id !== playerId) {
             const li = document.createElement('li');
             li.textContent = jogador.nome;
             li.dataset.id = jogador.id;
@@ -550,7 +619,7 @@ socket.on('atualizarTurno', (data) => {
     if (turnoAtual) turnoAtual.textContent = `Turno de: ${data.jogadorNome}`;
     if (turnoAtualMobile) turnoAtualMobile.textContent = `Turno: ${data.jogadorNome}`;
     
-    if (data.jogadorId === socket.id) {
+    if (data.jogadorId === playerId) {
         // É meu turno
         if (window.innerWidth <= 600) {
             // Mobile: Mostrar modal e botão
@@ -597,6 +666,25 @@ socket.on('novaDica', (data) => {
         listaDicasMobile.appendChild(dicaElement);
         listaDicasMobile.scrollTop = listaDicasMobile.scrollHeight;
     }
+});
+
+socket.on('dicasRestauradas', (data) => {
+    const listaDicas = document.getElementById('listaDicas');
+    const listaDicasMobile = document.getElementById('listaDicasMobile');
+    if (listaDicas) listaDicas.innerHTML = '';
+    if (listaDicasMobile) listaDicasMobile.innerHTML = '';
+
+    (data.todasDicas || []).forEach(dica => {
+        const dicaElement = document.createElement('div');
+        dicaElement.className = 'dica-item';
+        dicaElement.innerHTML = `
+            <strong>${dica.jogadorNome}:</strong>
+            <span>${dica.dica}</span>
+        `;
+
+        if (listaDicas) listaDicas.appendChild(dicaElement.cloneNode(true));
+        if (listaDicasMobile) listaDicasMobile.appendChild(dicaElement);
+    });
 });
 
 // Socket Events - Modo Online: Todas Dicas Enviadas

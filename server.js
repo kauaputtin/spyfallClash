@@ -59,6 +59,118 @@ const CARTAS_CLASH_ROYALE = [
 // Armazenamento de salas
 const salas = new Map();
 
+function gerarIdJogador() {
+  return `jogador_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function obterPlayerId(socket, playerIdInformado) {
+  const playerId = playerIdInformado || socket.data.playerId || socket.handshake.auth?.playerId || gerarIdJogador();
+  socket.data.playerId = playerId;
+  socket.join(playerId);
+  return playerId;
+}
+
+function encontrarSalaDoJogador(playerId) {
+  for (const [codigo, sala] of salas.entries()) {
+    const jogador = sala.jogadores.find(j => j.id === playerId);
+    if (jogador) {
+      return { codigo, sala, jogador };
+    }
+  }
+  return null;
+}
+
+function jogadoresPublicos(sala) {
+  return sala.jogadores.map(jogador => ({
+    id: jogador.id,
+    nome: jogador.nome,
+    online: jogador.online !== false
+  }));
+}
+
+function atualizarJogadoresSala(codigo, sala) {
+  io.to(codigo).emit('atualizarJogadores', jogadoresPublicos(sala));
+}
+
+function emitirParaJogador(jogadorId, evento, payload) {
+  io.to(jogadorId).emit(evento, payload);
+}
+
+function montarPayloadRodada(sala, jogadorPartida) {
+  const imagemCarta = jogadorPartida.isImpostor ? null : obterImagemCarta(sala.palavraAtual);
+
+  return {
+    rodada: sala.rodadaAtual,
+    totalRodadas: 3,
+    palavra: jogadorPartida.palavra,
+    isImpostor: jogadorPartida.isImpostor,
+    imagemCarta,
+    carta: jogadorPartida.isImpostor ? null : {
+      nome: sala.palavraAtual,
+      imagem: imagemCarta
+    },
+    modoJogo: sala.modoJogo
+  };
+}
+
+function enviarTurnoAtual(codigo, sala) {
+  if (sala.modoJogo !== 'online' || sala.estado !== 'jogando') return;
+  const jogadorAtual = sala.jogadoresNaPartida[sala.turnoAtual];
+  if (!jogadorAtual) return;
+
+  io.to(codigo).emit('atualizarTurno', {
+    jogadorId: jogadorAtual.id,
+    jogadorNome: jogadorAtual.nome,
+    turnoIndex: sala.turnoAtual,
+    rodadaAtual: sala.turnoRodadaAtual
+  });
+}
+
+function restaurarEstadoParaSocket(socket, codigo, sala, jogador, evento = 'sessaoRestaurada') {
+  socket.join(codigo);
+  const isHost = jogador.id === sala.host;
+
+  socket.emit(evento, {
+    codigo,
+    playerId: jogador.id,
+    nomeJogador: jogador.nome,
+    isHost,
+    estadoSala: sala.estado,
+    modoJogo: sala.modoJogo,
+    quantidadeImpostores: sala.quantidadeImpostores
+  });
+  socket.emit('atualizarJogadores', jogadoresPublicos(sala));
+  socket.emit('configuracaoAtualizada', { quantidadeImpostores: sala.quantidadeImpostores });
+
+  const jogadorPartida = sala.jogadoresNaPartida.find(j => j.id === jogador.id);
+
+  if (sala.estado === 'jogando' && jogadorPartida) {
+    socket.emit('rodadaIniciada', montarPayloadRodada(sala, jogadorPartida));
+    if (sala.modoJogo === 'online') {
+      socket.emit('dicasRestauradas', { todasDicas: sala.dicas });
+      enviarTurnoAtual(codigo, sala);
+      if (sala.turnoRodadaAtual >= 3) {
+        socket.emit('todasDicasEnviadas', {
+          mostrarBotaoVotacao: true,
+          hostId: sala.host
+        });
+      }
+    }
+  } else if (sala.estado === 'votando' && jogadorPartida) {
+    socket.emit('votacaoIniciada', {
+      jogadores: sala.jogadoresNaPartida.map(j => ({ id: j.id, nome: j.nome }))
+    });
+    socket.emit('votosAtualizados', {
+      votos: sala.jogadoresNaPartida.map(j => ({ nome: j.nome, votos: j.votos }))
+    });
+  } else if (sala.estado === 'resultado' && sala.ultimoResultado) {
+    socket.emit('resultadoVotacao', sala.ultimoResultado);
+    socket.emit('aguardandoProximaRodada', {
+      rodadaAtual: sala.rodadaAtual
+    });
+  }
+}
+
 // Função para gerar código único de 6 caracteres
 function gerarCodigoSala() {
   const caracteres = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -219,379 +331,346 @@ function selecionarImpostores(jogadores, quantidade) {
 }
 
 io.on('connection', (socket) => {
-  console.log('Novo jogador conectado:', socket.id);
+  const playerId = obterPlayerId(socket);
+  console.log('Novo socket conectado:', socket.id, 'playerId:', playerId);
 
-  // Variáveis de heartbeat para este socket
   let lastPing = Date.now();
-  const PING_TIMEOUT = 300000; // 5 minutos - permite tela desligada/app minimizado
-  
-  // Monitorar inatividade do cliente
+  const PING_TIMEOUT = 300000;
+
   const pingCheckInterval = setInterval(() => {
     const timeSincePing = Date.now() - lastPing;
     if (timeSincePing > PING_TIMEOUT) {
-      console.log(`[Heartbeat] Cliente ${socket.id} inativo por ${timeSincePing}ms. Desconectando...`);
+      console.log(`[Heartbeat] Cliente ${playerId} inativo por ${timeSincePing}ms. Desconectando socket...`);
       socket.disconnect(true);
     }
-  }, 60000); // Verificar a cada 60 segundos
+  }, 60000);
 
-  // Listener para ping do cliente
-  socket.on('ping', (data) => {
+  socket.on('ping', () => {
     lastPing = Date.now();
-    // Responder com pong
     socket.emit('pong');
   });
 
-  // Limpar interval ao desconectar
-  socket.on('disconnect', () => {
-    clearInterval(pingCheckInterval);
+  socket.on('retomarSessao', ({ codigo, playerId: playerIdInformado }) => {
+    const id = obterPlayerId(socket, playerIdInformado);
+    const sala = salas.get(codigo);
+    if (!sala) {
+      socket.emit('sessaoNaoEncontrada');
+      return;
+    }
+
+    const jogador = sala.jogadores.find(j => j.id === id);
+    if (!jogador) {
+      socket.emit('sessaoNaoEncontrada');
+      return;
+    }
+
+    jogador.online = true;
+    jogador.socketId = socket.id;
+    restaurarEstadoParaSocket(socket, codigo, sala, jogador);
+    atualizarJogadoresSala(codigo, sala);
+    console.log(`${jogador.nome} restaurou sessao na sala ${codigo}`);
   });
 
-  // Criar sala
-  socket.on('criarSala', ({ nomeJogador, modoJogo }) => {
+  socket.on('criarSala', ({ nomeJogador, modoJogo, playerId: playerIdInformado }) => {
+    const id = obterPlayerId(socket, playerIdInformado);
     const codigo = gerarCodigoSala();
     const sala = {
       codigo,
-      host: socket.id,
-      modoJogo: modoJogo || 'presencial', // 'presencial' ou 'online'
+      host: id,
+      modoJogo: modoJogo || 'presencial',
       jogadores: [{
-        id: socket.id,
+        id,
+        socketId: socket.id,
         nome: nomeJogador,
+        online: true,
         isImpostor: false,
         palavra: null,
         votos: 0
       }],
-      jogadoresNaPartida: [], // Jogadores que estão ativamente na partida atual
-      estado: 'aguardando', // aguardando, configurando, jogando, votando, resultado
+      jogadoresNaPartida: [],
+      estado: 'aguardando',
       rodadaAtual: 0,
       quantidadeImpostores: 1,
       palavraAtual: null,
       votos: {},
+      ultimoResultado: null,
       jogadoresQueVotaram: new Set(),
-      // Campos específicos do modo online
-      dicas: [], // { jogadorId, jogadorNome, dica }
-      turnoAtual: 0, // Índice do jogador que pode enviar dica
-      turnoRodadaAtual: 0, // Quantas rodadas de dicas foram completadas (0-2, total 3)
+      dicas: [],
+      turnoAtual: 0,
+      turnoRodadaAtual: 0,
       jogadoresQueEnviaramDica: new Set()
     };
-    
+
     salas.set(codigo, sala);
     socket.join(codigo);
-    socket.emit('salaCriada', { codigo, isHost: true, modoJogo: sala.modoJogo });
-    socket.emit('atualizarJogadores', sala.jogadores);
+    socket.emit('salaCriada', { codigo, playerId: id, nomeJogador, isHost: true, modoJogo: sala.modoJogo });
+    socket.emit('atualizarJogadores', jogadoresPublicos(sala));
     console.log(`Sala criada: ${codigo} por ${nomeJogador} (modo: ${sala.modoJogo})`);
   });
 
-  // Entrar em sala
-  socket.on('entrarSala', ({ codigo, nomeJogador }) => {
+  socket.on('entrarSala', ({ codigo, nomeJogador, playerId: playerIdInformado }) => {
+    const id = obterPlayerId(socket, playerIdInformado);
     const sala = salas.get(codigo);
-    
+
     if (!sala) {
-      socket.emit('erro', { mensagem: 'Sala não encontrada!' });
+      socket.emit('erro', { mensagem: 'Sala nao encontrada!' });
       return;
     }
 
-    // Removido a restrição de estado - jogador pode entrar durante partida
-    // Ele ficará no lobby até a próxima rodada
+    const jogadorExistente = sala.jogadores.find(j => j.id === id);
+    if (jogadorExistente) {
+      jogadorExistente.nome = nomeJogador || jogadorExistente.nome;
+      jogadorExistente.online = true;
+      jogadorExistente.socketId = socket.id;
+      restaurarEstadoParaSocket(socket, codigo, sala, jogadorExistente, 'entrouSala');
+      atualizarJogadoresSala(codigo, sala);
+      return;
+    }
 
     if (sala.jogadores.length >= 10) {
-      socket.emit('erro', { mensagem: 'Sala cheia! Máximo de 10 jogadores.' });
+      socket.emit('erro', { mensagem: 'Sala cheia! Maximo de 10 jogadores.' });
       return;
     }
 
     sala.jogadores.push({
-      id: socket.id,
+      id,
+      socketId: socket.id,
       nome: nomeJogador,
+      online: true,
       isImpostor: false,
       palavra: null,
       votos: 0
     });
 
     socket.join(codigo);
-    socket.emit('entrouSala', { 
-      codigo, 
-      isHost: socket.id === sala.host,
-      estadoSala: sala.estado, // Informar o estado atual da sala
-      modoJogo: sala.modoJogo // Informar o modo de jogo
+    socket.emit('entrouSala', {
+      codigo,
+      playerId: id,
+      nomeJogador,
+      isHost: id === sala.host,
+      estadoSala: sala.estado,
+      modoJogo: sala.modoJogo
     });
-    io.to(codigo).emit('atualizarJogadores', sala.jogadores);
+    atualizarJogadoresSala(codigo, sala);
     console.log(`${nomeJogador} entrou na sala ${codigo} (estado: ${sala.estado})`);
   });
 
-  // Sair da sala
   socket.on('sairDaSala', (codigo) => {
+    const id = obterPlayerId(socket);
     const sala = salas.get(codigo);
     if (!sala) return;
 
-    const jogadorIndex = sala.jogadores.findIndex(j => j.id === socket.id);
-    if (jogadorIndex !== -1) {
-      const jogador = sala.jogadores[jogadorIndex];
-      sala.jogadores.splice(jogadorIndex, 1);
-      socket.leave(codigo);
-      
-      // Se era o host, transferir para outro jogador ou deletar sala
-      if (socket.id === sala.host) {
-        if (sala.jogadores.length > 0) {
-          sala.host = sala.jogadores[0].id;
-          io.to(codigo).emit('novoHost', { novoHostId: sala.host });
-          console.log(`Host transferido para ${sala.jogadores[0].nome} na sala ${codigo}`);
-        } else {
-          salas.delete(codigo);
-          console.log(`Sala ${codigo} deletada (sem jogadores)`);
-          return;
-        }
+    const jogadorIndex = sala.jogadores.findIndex(j => j.id === id);
+    if (jogadorIndex === -1) return;
+
+    const jogador = sala.jogadores[jogadorIndex];
+    sala.jogadores.splice(jogadorIndex, 1);
+    sala.jogadoresNaPartida = sala.jogadoresNaPartida.filter(j => j.id !== id);
+    socket.leave(codigo);
+
+    if (id === sala.host) {
+      if (sala.jogadores.length > 0) {
+        sala.host = sala.jogadores[0].id;
+        io.to(codigo).emit('novoHost', { novoHostId: sala.host });
+        emitirParaJogador(sala.host, 'tornouHost', true);
+        console.log(`Host transferido para ${sala.jogadores[0].nome} na sala ${codigo}`);
+      } else {
+        salas.delete(codigo);
+        console.log(`Sala ${codigo} deletada (sem jogadores)`);
+        return;
       }
-      
-      io.to(codigo).emit('atualizarJogadores', sala.jogadores);
-      console.log(`${jogador.nome} saiu da sala ${codigo}`);
     }
+
+    atualizarJogadoresSala(codigo, sala);
+    console.log(`${jogador.nome} saiu da sala ${codigo}`);
   });
 
-  // Configurar quantidade de impostores (apenas host)
   socket.on('configurarImpostores', ({ codigo, quantidade }) => {
+    const id = obterPlayerId(socket);
     const sala = salas.get(codigo);
-    if (!sala || socket.id !== sala.host) return;
-    
+    if (!sala || id !== sala.host) return;
+
     sala.quantidadeImpostores = quantidade;
     sala.estado = 'configurando';
     io.to(codigo).emit('configuracaoAtualizada', { quantidadeImpostores: quantidade });
   });
 
-  // Iniciar partida (apenas host)
   socket.on('iniciarPartida', (codigo) => {
+    const id = obterPlayerId(socket);
     const sala = salas.get(codigo);
-    if (!sala || socket.id !== sala.host) return;
-    
+    if (!sala || id !== sala.host) return;
+
     if (sala.jogadores.length < 3) {
-      socket.emit('erro', { mensagem: 'É necessário pelo menos 3 jogadores para começar!' });
+      socket.emit('erro', { mensagem: 'E necessario pelo menos 3 jogadores para comecar!' });
       return;
     }
 
-    // Reiniciar estado da partida
     sala.rodadaAtual = 1;
     sala.estado = 'jogando';
     sala.votos = {};
+    sala.ultimoResultado = null;
     sala.jogadoresQueVotaram = new Set();
-
-    // Resetar dicas e turnos (modo online)
     sala.dicas = [];
     sala.turnoAtual = 0;
     sala.turnoRodadaAtual = 0;
     sala.jogadoresQueEnviaramDica = new Set();
+    sala.jogadoresNaPartida = sala.jogadores.map(jogador => ({
+      id: jogador.id,
+      nome: jogador.nome,
+      isImpostor: false,
+      palavra: null,
+      votos: 0
+    }));
 
-    // Copiar jogadores atuais para jogadoresNaPartida (apenas esses jogam esta rodada)
-    sala.jogadoresNaPartida = JSON.parse(JSON.stringify(sala.jogadores));
-
-    // Selecionar impostores APENAS entre jogadores na partida
     const impostores = selecionarImpostores(sala.jogadoresNaPartida, sala.quantidadeImpostores);
     const palavra = obterCartaAleatoria();
     sala.palavraAtual = palavra;
 
-    // Distribuir palavras APENAS para jogadores na partida
     sala.jogadoresNaPartida.forEach((jogador, index) => {
       jogador.isImpostor = impostores.includes(index);
       jogador.palavra = jogador.isImpostor ? null : palavra;
       jogador.votos = 0;
+      emitirParaJogador(jogador.id, 'rodadaIniciada', montarPayloadRodada(sala, jogador));
     });
 
-    // Notificar APENAS jogadores na partida
-    sala.jogadoresNaPartida.forEach((jogador) => {
-      io.to(jogador.id).emit('rodadaIniciada', {
-        rodada: sala.rodadaAtual,
-        totalRodadas: sala.totalRodadas,
-        palavra: jogador.palavra,
-        isImpostor: jogador.isImpostor,
-        imagemCarta: jogador.isImpostor ? null : obterImagemCarta(palavra), // Impostor não recebe imagem
-        modoJogo: sala.modoJogo // Informar modo de jogo
-      });
-    });
-
-    // Se modo online, notificar quem é o primeiro a dar dica
-    if (sala.modoJogo === 'online') {
-      const primeiroJogador = sala.jogadoresNaPartida[0];
-      io.to(codigo).emit('atualizarTurno', {
-        jogadorId: primeiroJogador.id,
-        jogadorNome: primeiroJogador.nome,
-        turnoIndex: 0
-      });
-    }
-
-    io.to(codigo).emit('atualizarJogadores', sala.jogadores);
+    enviarTurnoAtual(codigo, sala);
+    atualizarJogadoresSala(codigo, sala);
     console.log(`Partida iniciada na sala ${codigo}, rodada ${sala.rodadaAtual} com ${sala.jogadoresNaPartida.length} jogadores`);
   });
 
-  // Enviar dica (modo online)
   socket.on('enviarDica', ({ codigo, dica }) => {
+    const id = obterPlayerId(socket);
     const sala = salas.get(codigo);
     if (!sala || sala.modoJogo !== 'online' || sala.estado !== 'jogando') return;
 
-    // Verificar se é o turno do jogador
     const jogadorAtual = sala.jogadoresNaPartida[sala.turnoAtual];
-    if (!jogadorAtual || jogadorAtual.id !== socket.id) {
-      socket.emit('erro', { mensagem: 'Não é seu turno!' });
+    if (!jogadorAtual || jogadorAtual.id !== id) {
+      socket.emit('erro', { mensagem: 'Nao e seu turno!' });
       return;
     }
 
-    // Verificar se já enviou dica
-    if (sala.jogadoresQueEnviaramDica.has(socket.id)) {
-      socket.emit('erro', { mensagem: 'Você já enviou sua dica!' });
+    if (sala.jogadoresQueEnviaramDica.has(id)) {
+      socket.emit('erro', { mensagem: 'Voce ja enviou sua dica!' });
       return;
     }
 
-    // Verificar se a dica já foi dita por outro jogador
     const dicaNormalizada = dica.trim().toLowerCase();
     const dicaDuplicada = sala.dicas.find(d => d.dica.trim().toLowerCase() === dicaNormalizada);
-    
+
     if (dicaDuplicada) {
-      socket.emit('dicaDuplicada', { 
-        mensagem: `Esta dica já foi dita por ${dicaDuplicada.jogadorNome}! Escolha outra dica.` 
+      socket.emit('dicaDuplicada', {
+        mensagem: `Esta dica ja foi dita por ${dicaDuplicada.jogadorNome}! Escolha outra dica.`
       });
-      console.log(`[Sala ${codigo}] ${jogadorAtual.nome} tentou enviar dica duplicada: "${dica}"`);
       return;
     }
 
-    // Adicionar dica
     sala.dicas.push({
-      jogadorId: socket.id,
+      jogadorId: id,
       jogadorNome: jogadorAtual.nome,
-      dica: dica
+      dica
     });
-    sala.jogadoresQueEnviaramDica.add(socket.id);
+    sala.jogadoresQueEnviaramDica.add(id);
 
-    // Notificar todos sobre a nova dica
     io.to(codigo).emit('novaDica', {
       jogadorNome: jogadorAtual.nome,
-      dica: dica,
+      dica,
       todasDicas: sala.dicas
     });
 
-    // Avançar para próximo turno
     sala.turnoAtual++;
 
-    // Verificar se todos já enviaram dicas nesta rodada
     if (sala.turnoAtual >= sala.jogadoresNaPartida.length) {
-      // Rodada de dicas completada
       sala.turnoRodadaAtual++;
       sala.turnoAtual = 0;
       sala.jogadoresQueEnviaramDica.clear();
-      
-      // Verificar se completou os 3 turnos
+
       if (sala.turnoRodadaAtual >= 3) {
-        // Todas as 3 rodadas foram enviadas - mostrar botão de votação para host
-        const host = sala.jogadores[0];
-        io.to(codigo).emit('todasDicasEnviadas', { 
+        io.to(codigo).emit('todasDicasEnviadas', {
           mostrarBotaoVotacao: true,
-          hostId: host.id 
+          hostId: sala.host
         });
-        console.log(`Todas as 3 rodadas de dicas enviadas na sala ${codigo}`);
       } else {
-        // Notificar que rodada foi completada e iniciar próxima
-        io.to(codigo).emit('rodadaDicasCompleta', { 
+        io.to(codigo).emit('rodadaDicasCompleta', {
           rodadaAtual: sala.turnoRodadaAtual,
-          totalRodadas: 3 
+          totalRodadas: 3
         });
-        
-        // Notificar primeiro jogador da próxima rodada
-        const proximoJogador = sala.jogadoresNaPartida[0];
-        io.to(codigo).emit('atualizarTurno', {
-          jogadorId: proximoJogador.id,
-          jogadorNome: proximoJogador.nome,
-          turnoIndex: 0,
-          rodadaAtual: sala.turnoRodadaAtual
-        });
+        enviarTurnoAtual(codigo, sala);
       }
     } else {
-      // Notificar próximo jogador na mesma rodada
-      const proximoJogador = sala.jogadoresNaPartida[sala.turnoAtual];
-      io.to(codigo).emit('atualizarTurno', {
-        jogadorId: proximoJogador.id,
-        jogadorNome: proximoJogador.nome,
-        turnoIndex: sala.turnoAtual,
-        rodadaAtual: sala.turnoRodadaAtual
-      });
+      enviarTurnoAtual(codigo, sala);
     }
   });
 
-  // Iniciar votação
   socket.on('iniciarVotacao', (codigo) => {
+    const id = obterPlayerId(socket);
     const sala = salas.get(codigo);
-    if (!sala || socket.id !== sala.host) return;
-    
+    if (!sala || id !== sala.host) return;
+
     sala.estado = 'votando';
     sala.votos = {};
     sala.jogadoresQueVotaram = new Set();
-    
-    // Enviar apenas jogadores que estão NA PARTIDA para votação
+
     io.to(codigo).emit('votacaoIniciada', {
       jogadores: sala.jogadoresNaPartida.map(j => ({ id: j.id, nome: j.nome }))
     });
   });
 
-  // Encerrar partida (apenas host)
   socket.on('encerrarPartida', (codigo) => {
+    const id = obterPlayerId(socket);
     const sala = salas.get(codigo);
-    if (!sala || socket.id !== sala.host) return;
-    
-    console.log(`Host encerrou a partida na sala ${codigo}`);
-    
-    // Resetar estado da sala para lobby
+    if (!sala || id !== sala.host) return;
+
     sala.estado = 'aguardando';
     sala.rodadaAtual = 0;
     sala.palavraAtual = null;
     sala.votos = {};
+    sala.ultimoResultado = null;
     sala.jogadoresQueVotaram = new Set();
-    sala.jogadoresNaPartida = []; // Limpar jogadores da partida
-    sala.dicas = []; // Limpar dicas
+    sala.jogadoresNaPartida = [];
+    sala.dicas = [];
     sala.turnoAtual = 0;
     sala.turnoRodadaAtual = 0;
     sala.jogadoresQueEnviaramDica = new Set();
-    
-    // Resetar dados dos jogadores
+
     sala.jogadores.forEach(jogador => {
       jogador.isImpostor = false;
       jogador.palavra = null;
       jogador.votos = 0;
     });
-    
-    // Notificar todos os jogadores
+
     io.to(codigo).emit('partidaEncerrada');
-    
-    // Atualizar lista de jogadores no lobby
-    setTimeout(() => {
-      io.to(codigo).emit('atualizarJogadores', sala.jogadores);
-    }, 3000); // 3 segundos para mostrar mensagem de encerramento
+    setTimeout(() => atualizarJogadoresSala(codigo, sala), 3000);
   });
 
-  // Votar em jogador
   socket.on('votar', ({ codigo, jogadorVotadoId }) => {
+    const id = obterPlayerId(socket);
     const sala = salas.get(codigo);
     if (!sala || sala.estado !== 'votando') return;
-    if (sala.jogadoresQueVotaram.has(socket.id)) return;
+    if (sala.jogadoresQueVotaram.has(id)) return;
+    if (!sala.jogadoresNaPartida.some(j => j.id === id)) return;
 
-    // Buscar jogador votado APENAS entre jogadores na partida
     const jogadorVotado = sala.jogadoresNaPartida.find(j => j.id === jogadorVotadoId);
     if (!jogadorVotado) return;
 
     jogadorVotado.votos++;
-    sala.jogadoresQueVotaram.add(socket.id);
+    sala.jogadoresQueVotaram.add(id);
 
-    // Verificar se todos os jogadores NA PARTIDA votaram
     if (sala.jogadoresQueVotaram.size === sala.jogadoresNaPartida.length) {
-      // Determinar jogador mais votado (apenas entre jogadores na partida)
       const jogadoresOrdenados = [...sala.jogadoresNaPartida].sort((a, b) => b.votos - a.votos);
       const maisVotado = jogadoresOrdenados[0];
       const empate = jogadoresOrdenados[0].votos === jogadoresOrdenados[1]?.votos;
 
       const resultado = {
-        maisVotado: maisVotado,
-        empate: empate,
+        maisVotado,
+        empate,
         palavraCorreta: sala.palavraAtual,
-        imagemCarta: obterImagemCarta(sala.palavraAtual), // Todos veem a imagem no resultado
+        imagemCarta: obterImagemCarta(sala.palavraAtual),
         votos: sala.jogadoresNaPartida.map(j => ({ nome: j.nome, votos: j.votos, isImpostor: j.isImpostor }))
       };
 
+      sala.ultimoResultado = resultado;
       io.to(codigo).emit('resultadoVotacao', resultado);
 
-      // Aguardar host iniciar próxima rodada
       setTimeout(() => {
         sala.estado = 'resultado';
         io.to(codigo).emit('aguardandoProximaRodada', {
@@ -599,93 +678,62 @@ io.on('connection', (socket) => {
         });
       }, 5000);
     } else {
-      // Atualizar votos parciais (apenas jogadores na partida)
       io.to(codigo).emit('votosAtualizados', {
         votos: sala.jogadoresNaPartida.map(j => ({ nome: j.nome, votos: j.votos }))
       });
     }
   });
 
-  // Iniciar nova rodada (apenas host)
   socket.on('iniciarNovaRodada', (codigo) => {
+    const id = obterPlayerId(socket);
     const sala = salas.get(codigo);
-    if (!sala || socket.id !== sala.host) return;
-    
-    if (sala.estado !== 'resultado') return;
-    
-    // Incrementar rodada
+    if (!sala || id !== sala.host || sala.estado !== 'resultado') return;
+
     sala.rodadaAtual++;
     sala.estado = 'jogando';
-    
-    // Resetar dicas (modo online)
+    sala.ultimoResultado = null;
     sala.dicas = [];
     sala.turnoAtual = 0;
     sala.turnoRodadaAtual = 0;
     sala.jogadoresQueEnviaramDica = new Set();
-    
-    // Atualizar jogadoresNaPartida com TODOS os jogadores atuais (incluindo os que entraram durante a partida anterior)
-    sala.jogadoresNaPartida = JSON.parse(JSON.stringify(sala.jogadores));
-    
-    // Selecionar nova palavra e novos impostores
+    sala.jogadoresQueVotaram = new Set();
+    sala.jogadoresNaPartida = sala.jogadores.map(jogador => ({
+      id: jogador.id,
+      nome: jogador.nome,
+      isImpostor: false,
+      palavra: null,
+      votos: 0
+    }));
+
     const novaPalavra = obterCartaAleatoria();
     sala.palavraAtual = novaPalavra;
     const novosImpostores = selecionarImpostores(sala.jogadoresNaPartida, sala.quantidadeImpostores);
-    
+
     sala.jogadoresNaPartida.forEach((jogador, index) => {
       jogador.isImpostor = novosImpostores.includes(index);
       jogador.palavra = jogador.isImpostor ? null : novaPalavra;
       jogador.votos = 0;
+      emitirParaJogador(jogador.id, 'rodadaIniciada', montarPayloadRodada(sala, jogador));
     });
 
-    sala.jogadoresNaPartida.forEach((jogador) => {
-      io.to(jogador.id).emit('rodadaIniciada', {
-        rodada: sala.rodadaAtual,
-        palavra: jogador.palavra,
-        isImpostor: jogador.isImpostor,
-        imagemCarta: jogador.isImpostor ? null : obterImagemCarta(novaPalavra),
-        modoJogo: sala.modoJogo
-      });
-    });
-
-    // Se modo online, notificar quem é o primeiro a dar dica
-    if (sala.modoJogo === 'online') {
-      const primeiroJogador = sala.jogadoresNaPartida[0];
-      io.to(codigo).emit('atualizarTurno', {
-        jogadorId: primeiroJogador.id,
-        jogadorNome: primeiroJogador.nome,
-        turnoIndex: 0
-      });
-    }
-
-    io.to(codigo).emit('atualizarJogadores', sala.jogadores);
+    enviarTurnoAtual(codigo, sala);
+    atualizarJogadoresSala(codigo, sala);
     console.log(`Nova rodada ${sala.rodadaAtual} iniciada na sala ${codigo} com ${sala.jogadoresNaPartida.length} jogadores`);
   });
 
-  // Desconexão
   socket.on('disconnect', () => {
-    console.log('Jogador desconectado:', socket.id);
-    
-    // Remover jogador de todas as salas
-    for (const [codigo, sala] of salas.entries()) {
-      const index = sala.jogadores.findIndex(j => j.id === socket.id);
-      if (index !== -1) {
-        sala.jogadores.splice(index, 1);
-        
-        // Se era o host, transferir host para próximo jogador ou deletar sala
-        if (sala.host === socket.id) {
-          if (sala.jogadores.length > 0) {
-            sala.host = sala.jogadores[0].id;
-            io.to(sala.host).emit('tornouHost', true);
-          } else {
-            salas.delete(codigo);
-            continue;
-          }
-        }
-        
-        io.to(codigo).emit('atualizarJogadores', sala.jogadores);
-        break;
-      }
-    }
+    clearInterval(pingCheckInterval);
+    const id = socket.data.playerId;
+    console.log('Socket desconectado:', socket.id, 'playerId:', id);
+    if (!id) return;
+
+    const registro = encontrarSalaDoJogador(id);
+    if (!registro) return;
+    if (registro.jogador.socketId && registro.jogador.socketId !== socket.id) return;
+
+    registro.jogador.online = false;
+    registro.jogador.socketId = null;
+    atualizarJogadoresSala(registro.codigo, registro.sala);
   });
 });
 

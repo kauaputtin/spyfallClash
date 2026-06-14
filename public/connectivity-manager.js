@@ -106,7 +106,7 @@ class ConnectivityManager {
             // Desconectar o socket quando a janela for fechada
             if (this.socket && this.socket.connected) {
                 console.log('[Connectivity] Janela sendo fechada - desconectando socket');
-                this.socket.disconnect();
+                console.log('[Connectivity] Sessao preservada para reconexao');
             }
         });
 
@@ -119,7 +119,7 @@ class ConnectivityManager {
                 // Página está sendo fechada
                 if (this.socket && this.socket.connected) {
                     console.log('[Connectivity] Página fechada - desconectando socket');
-                    this.socket.disconnect();
+                    console.log('[Connectivity] Sessao preservada para reconexao');
                 }
             }
         });
