@@ -3,7 +3,7 @@
  * Continua enviando pings mesmo quando a aba está em segundo plano
  */
 
-const CACHE_NAME = 'spyfall-clash-v1';
+const CACHE_NAME = 'spyfall-clash-v2';
 const HEARTBEAT_PORT = 'heartbeat-port';
 
 // Registrar porta para comunicação com a página
@@ -58,14 +58,15 @@ self.addEventListener('install', (event) => {
                 '/index.html',
                 '/script.js',
                 '/heartbeat.js',
-                '/style.css',
-                '/socket.io/socket.io.js'
+                '/connectivity-manager.js',
+                '/style.css'
             ]).catch(err => {
                 // Não falhar se alguns recursos não estiverem disponíveis
                 console.log('[Service Worker] Alguns recursos não foram cacheados:', err);
             });
         })
     );
+    self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
@@ -78,13 +79,18 @@ self.addEventListener('activate', (event) => {
                     }
                 })
             );
-        })
+        }).then(() => self.clients.claim())
     );
 });
 
 // Network primeiro, fallback para cache
 self.addEventListener('fetch', (event) => {
     if (event.request.method !== 'GET') {
+        return;
+    }
+
+    const url = new URL(event.request.url);
+    if (url.pathname.startsWith('/socket.io/')) {
         return;
     }
 

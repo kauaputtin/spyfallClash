@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
+const os = require('os');
 
 const app = express();
 const server = http.createServer(app);
@@ -12,6 +13,13 @@ const io = socketIo(server, {
     origin: "*",
     methods: ["GET", "POST"]
   }
+});
+
+app.use((req, res, next) => {
+  if (req.path === '/service-worker.js') {
+    res.setHeader('Cache-Control', 'no-store');
+  }
+  next();
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
@@ -737,9 +745,19 @@ io.on('connection', (socket) => {
   });
 });
 
+function obterEnderecosRede(porta) {
+  return Object.values(os.networkInterfaces())
+    .flat()
+    .filter(iface => iface && iface.family === 'IPv4' && !iface.internal)
+    .map(iface => `http://${iface.address}:${porta}`);
+}
+
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
+const HOST = process.env.HOST || '0.0.0.0';
+server.listen(PORT, HOST, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
   console.log(`Acesse: http://localhost:${PORT}`);
+  obterEnderecosRede(PORT).forEach(url => {
+    console.log(`Celular na mesma rede: ${url}`);
+  });
 });
-

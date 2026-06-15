@@ -15,7 +15,12 @@ if (!playerId) {
 }
 
 const socket = io({
-    auth: { playerId }
+    auth: { playerId },
+    reconnection: true,
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: 1000,
+    timeout: 20000,
+    transports: ['polling', 'websocket']
 });
 
 let codigoSalaAtual = null;
@@ -23,6 +28,38 @@ let isHost = false;
 let nomeJogador = localStorage.getItem(STORAGE_KEYS.nomeJogador) || '';
 let jogadores = [];
 let modoJogo = 'presencial'; // 'presencial' ou 'online'
+let acaoPendenteConexao = null;
+
+function mostrarErroConexao(mensagem) {
+    const erroDiv = document.getElementById('erroMensagem');
+    if (erroDiv) {
+        erroDiv.textContent = mensagem;
+        erroDiv.classList.add('ativo');
+    }
+    atualizarStatusConexao('erro-conexao', mensagem);
+}
+
+function atualizarBotoesConexao(conectando) {
+    ['btnConfirmarCriar', 'btnConfirmarEntrar'].forEach(id => {
+        const botao = document.getElementById(id);
+        if (!botao) return;
+        botao.disabled = conectando;
+        botao.dataset.textoOriginal = botao.dataset.textoOriginal || botao.textContent;
+        botao.textContent = conectando ? 'Conectando...' : botao.dataset.textoOriginal;
+    });
+}
+
+function emitirComConexao(evento, payload) {
+    if (socket.connected) {
+        socket.emit(evento, payload);
+        return;
+    }
+
+    acaoPendenteConexao = { evento, payload };
+    atualizarBotoesConexao(true);
+    mostrarErroConexao('Conectando ao servidor. Se estiver no celular, acesse pelo IP do computador na mesma rede.');
+    socket.connect();
+}
 
 function salvarSessaoLocal(codigo, nome, id = playerId) {
     codigoSalaAtual = codigo;
@@ -114,7 +151,7 @@ document.getElementById('btnConfirmarCriar').addEventListener('click', () => {
     if (nome) {
         nomeJogador = nome;
         modoJogo = modoSelecionado;
-        socket.emit('criarSala', { nomeJogador: nome, modoJogo: modoSelecionado, playerId });
+        emitirComConexao('criarSala', { nomeJogador: nome, modoJogo: modoSelecionado, playerId });
     }
 });
 
@@ -129,7 +166,7 @@ document.getElementById('btnConfirmarEntrar').addEventListener('click', () => {
     
     if (codigo && nome) {
         nomeJogador = nome;
-        socket.emit('entrarSala', { codigo, nomeJogador: nome, playerId });
+        emitirComConexao('entrarSala', { codigo, nomeJogador: nome, playerId });
     }
 });
 
@@ -265,11 +302,30 @@ document.getElementById('btnSairSala').addEventListener('click', () => {
 
 // Socket Events - Sala Criada
 socket.on('connect', () => {
+    atualizarBotoesConexao(false);
+    document.getElementById('erroMensagem').classList.remove('ativo');
+
+    if (acaoPendenteConexao) {
+        const { evento, payload } = acaoPendenteConexao;
+        acaoPendenteConexao = null;
+        socket.emit(evento, payload);
+        return;
+    }
+
     const codigoSalvo = localStorage.getItem(STORAGE_KEYS.codigoSala);
     const playerIdSalvo = localStorage.getItem(STORAGE_KEYS.playerId);
     if (codigoSalvo && playerIdSalvo) {
         socket.emit('retomarSessao', { codigo: codigoSalvo, playerId: playerIdSalvo });
     }
+});
+
+socket.on('connect_error', (error) => {
+    atualizarBotoesConexao(false);
+    mostrarErroConexao(`Erro de conexao: ${error.message}. No celular, use o IP do computador, nao localhost.`);
+});
+
+socket.on('disconnect', () => {
+    atualizarBotoesConexao(false);
 });
 
 socket.on('sessaoRestaurada', (data) => {
