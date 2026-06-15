@@ -1,29 +1,24 @@
 /**
- * Sistema de Heartbeat e Reconexão Automática
- * Mantém o jogador conectado mesmo em situações desafiadoras
- * Continua funcionando com tela desligada ou app minimizado
+ * Heartbeat leve para manter sinal de vida com o servidor.
+ * A reconexao fica a cargo do Socket.IO para evitar conflito no mobile.
  */
 
 class HeartbeatManager {
     constructor(socket, options = {}) {
         this.socket = socket;
-        this.pingInterval = options.pingInterval || 15000; // 15 segundos
-        this.pongTimeout = options.pongTimeout || 240000; // 4 minutos (menor que o timeout do servidor)
-        this.maxReconnectAttempts = options.maxReconnectAttempts || 10;
-        this.reconnectDelay = options.reconnectDelay || 3000; // 3 segundos
-        
-        this.isPinging = false;
+        this.pingInterval = options.pingInterval || 15000;
+        this.pongTimeout = options.pongTimeout || 240000;
         this.reconnectAttempts = 0;
+        this.isPinging = false;
         this.lastPongTime = Date.now();
         this.isConnected = false;
         this.statusCallback = options.statusCallback || (() => {});
-        this.backgroundMode = false; // Rastrear se está em background
-        
+        this.backgroundMode = false;
+
         this.init();
     }
 
     init() {
-        // Listeners de conexão
         this.socket.on('connect', () => {
             this.isConnected = true;
             this.reconnectAttempts = 0;
@@ -36,65 +31,84 @@ class HeartbeatManager {
         this.socket.on('disconnect', (reason) => {
             this.isConnected = false;
             this.stopHeartbeat();
-            this.statusCallback('desconectado', `Desconectado: ${reason}`);
             console.log('[Heartbeat] Desconectado:', reason);
-            
-            // Não reconectar se foi desconexão manual (tipo "client namespace disconnect")
-            if (reason !== 'client namespace disconnect') {
-                this.attemptReconnect();
+
+            if (reason === 'io client disconnect' || reason === 'client namespace disconnect') {
+                this.statusCallback('desconectado', `Desconectado: ${reason}`);
+                return;
             }
+
+            this.statusCallback('reconectando', 'Reconectando ao servidor...');
         });
 
-        // Listener para pong do servidor
         this.socket.on('pong', () => {
             this.lastPongTime = Date.now();
             this.statusCallback('pong-recebido', 'Servidor respondeu');
         });
 
-        // Listener para erro de conexão
         this.socket.on('connect_error', (error) => {
-            this.statusCallback('erro-conexao', `Erro de conexão: ${error.message}`);
-            console.log('[Heartbeat] Erro de conexão:', error);
+            this.statusCallback('reconectando', `Tentando reconectar: ${error.message}`);
+            console.log('[Heartbeat] Erro de conexao:', error);
         });
 
-        // Monitorar visibilidade para ajustar comportamento mas NÃO parar heartbeat
+        this.socket.io.on('reconnect_attempt', (attempt) => {
+            this.reconnectAttempts = attempt;
+            this.statusCallback('reconectando', `Tentando reconectar... (${attempt})`);
+        });
+
+        this.socket.io.on('reconnect', () => {
+            this.reconnectAttempts = 0;
+            this.statusCallback('conectado', 'Reconectado ao servidor');
+        });
+
+        this.socket.io.on('reconnect_failed', () => {
+            this.statusCallback('erro-conexao', 'Nao foi possivel reconectar ao servidor');
+        });
+
         document.addEventListener('visibilitychange', () => {
-            if (document.hidden) {
-                this.backgroundMode = true;
-                console.log('[Heartbeat] Página em background - continuando heartbeat');
+            this.backgroundMode = document.hidden;
+            if (this.backgroundMode) {
+                console.log('[Heartbeat] Pagina em background - Socket.IO mantem reconexao');
             } else {
-                this.backgroundMode = false;
-                console.log('[Heartbeat] Página visível - heartbeat normal');
+                console.log('[Heartbeat] Pagina visivel - heartbeat normal');
+                this.lastPongTime = Date.now();
+                if (!this.socket.connected) {
+                    this.socket.connect();
+                }
             }
         });
     }
 
     startHeartbeat() {
         if (this.isPinging) return;
-        
+
         this.isPinging = true;
         console.log('[Heartbeat] Iniciando heartbeat...');
-        
+
         this.heartbeatInterval = setInterval(() => {
             if (this.isConnected) {
                 this.sendPing();
             }
         }, this.pingInterval);
 
-        // Verificar timeout de pong
         this.pongCheckInterval = setInterval(() => {
             const timeSinceLastPong = Date.now() - this.lastPongTime;
-            if (timeSinceLastPong > this.pongTimeout) {
-                console.log('[Heartbeat] Timeout de pong detectado');
-                this.socket.disconnect();
-                this.attemptReconnect();
+            if (timeSinceLastPong <= this.pongTimeout) return;
+
+            console.log('[Heartbeat] Pong atrasado; mantendo reconexao nativa do Socket.IO');
+            if (!this.socket.connected) {
+                this.socket.connect();
+                return;
             }
+
+            this.lastPongTime = Date.now();
+            this.statusCallback('conectado', 'Conectado ao servidor');
         }, this.pingInterval);
     }
 
     stopHeartbeat() {
         if (!this.isPinging) return;
-        
+
         this.isPinging = false;
         clearInterval(this.heartbeatInterval);
         clearInterval(this.pongCheckInterval);
@@ -105,31 +119,11 @@ class HeartbeatManager {
         try {
             this.socket.emit('ping', { timestamp: Date.now() });
             if (this.backgroundMode) {
-                console.log('[Heartbeat] Ping enviado em modo background');
+                console.log('[Heartbeat] Ping enviado em background');
             }
         } catch (error) {
             console.error('[Heartbeat] Erro ao enviar ping:', error);
         }
-    }
-
-    attemptReconnect() {
-        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-            this.statusCallback('falha-reconexao', 'Falha ao reconectar após múltiplas tentativas');
-            console.error('[Heartbeat] Falha ao reconectar após múltiplas tentativas');
-            return;
-        }
-
-        this.reconnectAttempts++;
-        const delayMs = this.reconnectDelay * this.reconnectAttempts;
-        
-        this.statusCallback('reconectando', `Tentando reconectar... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
-        console.log(`[Heartbeat] Reconectando em ${delayMs}ms (tentativa ${this.reconnectAttempts})`);
-
-        setTimeout(() => {
-            if (!this.isConnected) {
-                this.socket.connect();
-            }
-        }, delayMs);
     }
 
     getStatus() {
@@ -141,7 +135,6 @@ class HeartbeatManager {
     }
 }
 
-// Exportar para uso global
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = HeartbeatManager;
 }

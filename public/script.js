@@ -19,7 +19,8 @@ const socket = io({
     reconnection: true,
     reconnectionAttempts: Infinity,
     reconnectionDelay: 1000,
-    timeout: 20000,
+    reconnectionDelayMax: 5000,
+    timeout: 60000,
     transports: ['polling', 'websocket']
 });
 
@@ -124,7 +125,8 @@ const telas = {
 function mostrarTela(tela) {
     Object.values(telas).forEach(t => t.classList.remove('ativa'));
     telas[tela].classList.add('ativa');
-    
+    document.body.classList.toggle('tela-inicial-ativa', tela === 'inicial');
+
     // Adicionar classe especial ao container quando estiver na tela de rodada
     const container = document.querySelector('.container');
     if (tela === 'rodada') {
@@ -320,8 +322,12 @@ socket.on('connect', () => {
 });
 
 socket.on('connect_error', (error) => {
-    atualizarBotoesConexao(false);
-    mostrarErroConexao(`Erro de conexao: ${error.message}. No celular, use o IP do computador, nao localhost.`);
+    atualizarStatusConexao('reconectando', `Tentando reconectar: ${error.message}`);
+    if (acaoPendenteConexao) {
+        atualizarBotoesConexao(true);
+        return;
+    }
+    mostrarErroConexao(`Tentando reconectar: ${error.message}. No celular, use o IP do computador, nao localhost.`);
 });
 
 socket.on('disconnect', () => {
@@ -835,15 +841,6 @@ function atualizarStatusConexao(status, mensagem) {
 document.addEventListener('DOMContentLoaded', () => {
     document.body.classList.add('tela-inicial-ativa');
     inicializarGerenciadores();
-
-    // Listener para voltar para tela inicial
-    document.addEventListener('click', (e) => {
-        if (e.target.id === 'btnVoltarCriar' || e.target.id === 'btnVoltarEntrar') {
-            document.body.classList.add('tela-inicial-ativa');
-        } else if (e.target.id === 'btnCriarSala' || e.target.id === 'btnEntrarSala') {
-            document.body.classList.remove('tela-inicial-ativa');
-        }
-    });
 
     // Listener para visibilidade da página (quando volta do background)
     document.addEventListener('visibilitychange', () => {

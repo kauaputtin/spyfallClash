@@ -3,7 +3,7 @@
  * Continua enviando pings mesmo quando a aba está em segundo plano
  */
 
-const CACHE_NAME = 'spyfall-clash-v2';
+const CACHE_NAME = 'spyfall-clash-v3';
 const HEARTBEAT_PORT = 'heartbeat-port';
 
 // Registrar porta para comunicação com a página
