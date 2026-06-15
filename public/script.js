@@ -20,8 +20,7 @@ const socket = io({
     reconnectionAttempts: Infinity,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
-    timeout: 60000,
-    transports: ['polling', 'websocket']
+    timeout: 45000
 });
 
 let codigoSalaAtual = null;
@@ -81,30 +80,36 @@ function limparSessaoSala() {
     localStorage.removeItem(STORAGE_KEYS.nomeJogador);
 }
 
-// Gerenciadores de Conectividade
-let heartbeatManager = null;
-let connectivityManager = null;
+function limparCacheConexaoAntigo() {
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations()
+            .then(registrations => registrations.forEach(registration => registration.unregister()))
+            .catch(error => console.warn('[App] Erro ao remover Service Worker antigo:', error));
+    }
 
-// Inicializar gerenciadores de conectividade
+    if ('caches' in window) {
+        caches.keys()
+            .then(keys => keys
+                .filter(key => key.startsWith('spyfall-clash-'))
+                .forEach(key => caches.delete(key)))
+            .catch(error => console.warn('[App] Erro ao limpar cache antigo:', error));
+    }
+}
+
 function inicializarGerenciadores() {
-    // Criar ConnectivityManager para gerenciar Service Worker e detecção de fechamento
-    connectivityManager = new ConnectivityManager({
-        socket: socket, // Passar socket para detectar fechamento de janela
-        statusCallback: (status, mensagem) => {
-            console.log(`[Conectividade] ${status}: ${mensagem}`);
-            // Poderia usar isso para debug, mas não será mostrado por padrão
-        }
+    socket.io.on('reconnect_attempt', (tentativa) => {
+        console.log(`[Socket] Tentando reconectar (${tentativa})`);
+        atualizarStatusConexao('reconectando', `Tentando reconectar (${tentativa})`);
     });
 
-    // Criar HeartbeatManager para manter ping com servidor
-    heartbeatManager = new HeartbeatManager(socket, {
-        pingInterval: 15000,      // Ping a cada 15 segundos
-        pongTimeout: 240000,      // Timeout após 4 minutos sem pong
-        maxReconnectAttempts: 10,
-        reconnectDelay: 3000,
-        statusCallback: (status, mensagem) => {
-            atualizarStatusConexao(status, mensagem);
-        }
+    socket.io.on('reconnect', () => {
+        console.log('[Socket] Reconectado');
+        atualizarStatusConexao('conectado', 'Reconectado ao servidor');
+    });
+
+    socket.io.on('reconnect_error', (error) => {
+        console.log('[Socket] Erro ao reconectar:', error);
+        atualizarStatusConexao('reconectando', `Tentando reconectar: ${error.message}`);
     });
 }
 
@@ -840,6 +845,7 @@ function atualizarStatusConexao(status, mensagem) {
 // Adicionar classe para imagem de fundo apenas na tela inicial
 document.addEventListener('DOMContentLoaded', () => {
     document.body.classList.add('tela-inicial-ativa');
+    limparCacheConexaoAntigo();
     inicializarGerenciadores();
 
     // Listener para visibilidade da página (quando volta do background)
@@ -847,8 +853,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!document.hidden) {
             // Página voltou ao foco
             console.log('[App] Página voltou ao foco');
-            if (heartbeatManager) {
-                heartbeatManager.startHeartbeat();
+            if (socket && !socket.connected) {
+                socket.connect();
             }
         } else {
             // Página entrou em background

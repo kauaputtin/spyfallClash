@@ -12,7 +12,9 @@ const io = socketIo(server, {
   cors: {
     origin: "*",
     methods: ["GET", "POST"]
-  }
+  },
+  pingInterval: 25000,
+  pingTimeout: 120000
 });
 
 app.use((req, res, next) => {
@@ -341,22 +343,6 @@ function selecionarImpostores(jogadores, quantidade) {
 io.on('connection', (socket) => {
   const playerId = obterPlayerId(socket);
   console.log('Novo socket conectado:', socket.id, 'playerId:', playerId);
-
-  let lastPing = Date.now();
-  const PING_TIMEOUT = 300000;
-
-  const pingCheckInterval = setInterval(() => {
-    const timeSincePing = Date.now() - lastPing;
-    if (timeSincePing > PING_TIMEOUT) {
-      console.log(`[Heartbeat] Cliente ${playerId} inativo por ${timeSincePing}ms. Desconectando socket...`);
-      socket.disconnect(true);
-    }
-  }, 60000);
-
-  socket.on('ping', () => {
-    lastPing = Date.now();
-    socket.emit('pong');
-  });
 
   socket.on('retomarSessao', ({ codigo, playerId: playerIdInformado }) => {
     const id = obterPlayerId(socket, playerIdInformado);
@@ -730,7 +716,6 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    clearInterval(pingCheckInterval);
     const id = socket.data.playerId;
     console.log('Socket desconectado:', socket.id, 'playerId:', id);
     if (!id) return;
